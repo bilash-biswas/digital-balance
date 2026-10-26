@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Digital Balance</string>
+    <string name="accessibility_service_description">Digital Balance monitors foreground app launches to enforce your configured app limits and focus sessions. It does not read screen content or collect personal data.</string>
+    <string name="blocker_title">Take a breath</string>
+    <string name="blocker_desc">This app is currently restricted according to your Digital Balance rules.</string>
+    <string name="blocker_leave_btn">Return Home</string>
+    <string name="blocker_override_btn">Unlock for 5 Minutes</string>
+</resources>
