@@ -13,6 +13,7 @@ import '../data/repositories/settings_repository_impl.dart';
 import '../data/repositories/usage_repository_impl.dart';
 import '../data/backup/backup_service.dart';
 import '../features/notifications/services/notification_service.dart';
+import '../core/updates/app_update_service.dart';
 
 // Database & Core Providers
 final databaseProvider = Provider<AppDatabase>((ref) {
@@ -163,4 +164,9 @@ final localeControllerProvider = StateNotifierProvider<LocaleNotifier, Locale>((
 ) {
   final settingsRepo = ref.watch(settingsRepositoryProvider);
   return LocaleNotifier(settingsRepo);
+});
+
+final appUpdateServiceProvider = Provider<AppUpdateService>((ref) {
+  final bridge = ref.watch(platformBridgeProvider);
+  return AppUpdateService(bridge);
 });

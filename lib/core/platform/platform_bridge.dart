@@ -276,4 +276,38 @@ class PlatformBridge {
       return false;
     }
   }
+
+  Future<bool> installApk(String filePath) async {
+    try {
+      final res = await _usageChannel.invokeMethod<bool>('installApk', {
+        'filePath': filePath,
+      });
+      return res ?? false;
+    } catch (e, st) {
+      AppLogger.error('Failed to trigger APK install', e, st);
+      return false;
+    }
+  }
+
+  Future<bool> canRequestPackageInstalls() async {
+    try {
+      final res = await _usageChannel.invokeMethod<bool>(
+        'canRequestPackageInstalls',
+      );
+      return res ?? true;
+    } catch (_) {
+      return true;
+    }
+  }
+
+  Future<bool> openManageUnknownAppSources() async {
+    try {
+      final res = await _usageChannel.invokeMethod<bool>(
+        'openManageUnknownAppSources',
+      );
+      return res ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
 }

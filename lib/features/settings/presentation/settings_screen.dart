@@ -3,8 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../app/localization/app_strings.dart';
 import '../../../app/providers.dart';
+import '../../../core/constants/app_constants.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/balance_card.dart';
+import 'update_available_dialog.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -17,6 +19,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   int _dailyGoalMinutes = 180;
   bool _biometricOverride = false;
   bool _isLoading = true;
+  bool _isCheckingUpdate = false;
 
   @override
   void initState() {
@@ -35,6 +38,29 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         _biometricOverride = bio;
         _isLoading = false;
       });
+    }
+  }
+
+  Future<void> _checkForAppUpdates() async {
+    setState(() => _isCheckingUpdate = true);
+    final updateService = ref.read(appUpdateServiceProvider);
+    final update = await updateService.checkForUpdate();
+    if (!mounted) return;
+    setState(() => _isCheckingUpdate = false);
+
+    if (update != null) {
+      await UpdateAvailableDialog.show(
+        context,
+        updateInfo: update,
+        updateService: updateService,
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('You are using the latest version of Digital Balance!'),
+          duration: Duration(seconds: 2),
+        ),
+      );
     }
   }
 
@@ -198,6 +224,56 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 setState(() => _biometricOverride = val);
                 settingsRepo.setBiometricOverrideEnabled(val);
               },
+            ),
+          ),
+          const SizedBox(height: 14),
+
+          // App Version & Updates
+          BalanceCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'App Version & Updates',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Chip(
+                      label: const Text('v${AppConstants.appVersion}'),
+                      backgroundColor:
+                          theme.colorScheme.surfaceContainerHighest,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Checks for official updates directly from the GitHub repository.',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                OutlinedButton.icon(
+                  icon: _isCheckingUpdate
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.refresh_rounded, size: 18),
+                  label: Text(
+                    _isCheckingUpdate
+                        ? 'Checking GitHub...'
+                        : 'Check for Updates',
+                  ),
+                  onPressed: _isCheckingUpdate ? null : _checkForAppUpdates,
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 24),
