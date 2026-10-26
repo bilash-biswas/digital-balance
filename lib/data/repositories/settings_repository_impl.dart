@@ -41,6 +41,22 @@ class SettingsRepository {
     await setSetting('daily_goal_minutes', minutes.toString());
   }
 
+  Future<bool> isDailyTargetRestrictionEnabled() async {
+    final val = await getSetting('daily_target_restriction_enabled');
+    return val == 'true';
+  }
+
+  Stream<bool> watchDailyTargetRestrictionEnabled() {
+    return (_db.select(_db.userSettings)
+          ..where((tbl) => tbl.key.equals('daily_target_restriction_enabled')))
+        .watchSingleOrNull()
+        .map((entry) => entry?.value == 'true');
+  }
+
+  Future<void> setDailyTargetRestrictionEnabled(bool enabled) async {
+    await setSetting('daily_target_restriction_enabled', enabled ? 'true' : 'false');
+  }
+
   Future<String> getThemeMode() async {
     final val = await getSetting('theme_mode');
     return val ?? 'system';

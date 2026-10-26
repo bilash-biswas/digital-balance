@@ -115,5 +115,21 @@ void main() {
 
       await expectation;
     });
+
+    test('SettingsRepository watchDailyTargetRestrictionEnabled emits false then true', () async {
+      expect(await settingsRepo.isDailyTargetRestrictionEnabled(), isFalse);
+
+      final expectation = expectLater(
+        settingsRepo.watchDailyTargetRestrictionEnabled(),
+        emitsInOrder([false, true, false]),
+      );
+
+      await settingsRepo.setDailyTargetRestrictionEnabled(true);
+      await pumpEventQueue();
+      await settingsRepo.setDailyTargetRestrictionEnabled(false);
+      await pumpEventQueue();
+
+      await expectation;
+    });
   });
 }

@@ -7,6 +7,7 @@ import '../../../app/providers.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/logging/app_logger.dart';
 import '../../../core/permissions/permission_service.dart';
+import '../../../core/platform/platform_bridge.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/app_icon_widget.dart';
 import '../../../core/widgets/balance_card.dart';
@@ -283,98 +284,127 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                                   ? Colors.amber
                                   : theme.colorScheme.primary);
 
-                          return InkWell(
-                            onTap: () {
-                              DailyGoalBottomSheet.show(
-                                context,
-                                initialMinutes: goalMinutes,
-                                onSaved: (newGoal) {
-                                  ref
-                                      .read(settingsRepositoryProvider)
-                                      .setDailyGoalMinutes(newGoal);
+                          return StreamBuilder<bool>(
+                            stream: ref
+                                .watch(settingsRepositoryProvider)
+                                .watchDailyTargetRestrictionEnabled(),
+                            builder: (context, restrictSnap) {
+                              final isRestricted = restrictSnap.data ?? false;
+                              return InkWell(
+                                onTap: () async {
+                                  final settingsRepo =
+                                      ref.read(settingsRepositoryProvider);
+                                  final currentRestrict = await settingsRepo
+                                      .isDailyTargetRestrictionEnabled();
+                                  if (!context.mounted) return;
+                                  await DailyGoalBottomSheet.show(
+                                    context,
+                                    initialMinutes: goalMinutes,
+                                    initialEnforceRestriction: currentRestrict,
+                                    onSaved: (newGoal, newEnforce) async {
+                                      await settingsRepo
+                                          .setDailyGoalMinutes(newGoal);
+                                      await settingsRepo
+                                          .setDailyTargetRestrictionEnabled(
+                                              newEnforce);
+                                      final bridge = PlatformBridge();
+                                      await bridge.setDailyTargetEnforcement(
+                                        enabled: newEnforce,
+                                        targetMinutes: newGoal,
+                                      );
+                                    },
+                                  );
                                 },
-                              );
-                            },
-                            borderRadius: BorderRadius.circular(12),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 14,
-                                vertical: 10,
-                              ),
-                              decoration: BoxDecoration(
-                                color: theme.colorScheme.surfaceContainerHigh
-                                    .withValues(alpha: 0.5),
                                 borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: theme.colorScheme.outlineVariant
-                                      .withValues(alpha: 0.5),
-                                ),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceBetween,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                    vertical: 10,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: theme
+                                        .colorScheme.surfaceContainerHigh
+                                        .withValues(alpha: 0.5),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: isRestricted
+                                          ? theme.colorScheme.primary
+                                              .withValues(alpha: 0.6)
+                                          : theme.colorScheme.outlineVariant
+                                              .withValues(alpha: 0.5),
+                                    ),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
                                         children: [
-                                          Icon(
-                                            Icons.flag_outlined,
-                                            size: 16,
-                                            color: progressColor,
+                                          Row(
+                                            children: [
+                                              Icon(
+                                                isRestricted
+                                                    ? Icons.shield_rounded
+                                                    : Icons.flag_outlined,
+                                                size: 16,
+                                                color: progressColor,
+                                              ),
+                                              const SizedBox(width: 6),
+                                              Text(
+                                                'Daily Target: ${Formatters.formatDurationMinutes(goalMinutes)}${isRestricted ? " (Enforced)" : ""}',
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w600,
+                                                  color:
+                                                      theme.colorScheme.onSurface,
+                                                ),
+                                              ),
+                                            ],
                                           ),
-                                          const SizedBox(width: 6),
-                                          Text(
-                                            'Daily Target: ${Formatters.formatDurationMinutes(goalMinutes)}',
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.w600,
-                                              color:
-                                                  theme.colorScheme.onSurface,
-                                            ),
+                                          Row(
+                                            children: [
+                                              Text(
+                                                '$percent%',
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: progressColor,
+                                                ),
+                                              ),
+                                              const SizedBox(width: 4),
+                                              Icon(
+                                                Icons.edit_outlined,
+                                                size: 14,
+                                                color: theme
+                                                    .colorScheme
+                                                    .onSurfaceVariant,
+                                              ),
+                                            ],
                                           ),
                                         ],
                                       ),
-                                      Row(
-                                        children: [
-                                          Text(
-                                            '$percent%',
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.bold,
-                                              color: progressColor,
-                                            ),
+                                      const SizedBox(height: 8),
+                                      ClipRRect(
+                                        borderRadius: BorderRadius.circular(4),
+                                        child: LinearProgressIndicator(
+                                          value: fraction,
+                                          minHeight: 6,
+                                          backgroundColor: theme
+                                              .colorScheme
+                                              .surfaceContainerHighest,
+                                          valueColor:
+                                              AlwaysStoppedAnimation<Color>(
+                                            progressColor,
                                           ),
-                                          const SizedBox(width: 4),
-                                          Icon(
-                                            Icons.edit_outlined,
-                                            size: 14,
-                                            color: theme
-                                                .colorScheme
-                                                .onSurfaceVariant,
-                                          ),
-                                        ],
+                                        ),
                                       ),
                                     ],
                                   ),
-                                  const SizedBox(height: 8),
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(4),
-                                    child: LinearProgressIndicator(
-                                      value: fraction,
-                                      minHeight: 6,
-                                      backgroundColor: theme
-                                          .colorScheme
-                                          .surfaceContainerHighest,
-                                      valueColor: AlwaysStoppedAnimation<Color>(
-                                        progressColor,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
+                                ),
+                              );
+                            },
                           );
                         },
                       ),

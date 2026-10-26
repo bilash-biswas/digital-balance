@@ -3,18 +3,21 @@ import '../../../core/utils/formatters.dart';
 
 class DailyGoalBottomSheet extends StatefulWidget {
   final int initialMinutes;
-  final ValueChanged<int> onSaved;
+  final bool initialEnforceRestriction;
+  final void Function(int minutes, bool enforceRestriction) onSaved;
 
   const DailyGoalBottomSheet({
     super.key,
     required this.initialMinutes,
+    this.initialEnforceRestriction = false,
     required this.onSaved,
   });
 
   static Future<void> show(
     BuildContext context, {
     required int initialMinutes,
-    required ValueChanged<int> onSaved,
+    bool initialEnforceRestriction = false,
+    required void Function(int minutes, bool enforceRestriction) onSaved,
   }) {
     return showModalBottomSheet<void>(
       context: context,
@@ -24,6 +27,7 @@ class DailyGoalBottomSheet extends StatefulWidget {
       ),
       builder: (context) => DailyGoalBottomSheet(
         initialMinutes: initialMinutes,
+        initialEnforceRestriction: initialEnforceRestriction,
         onSaved: onSaved,
       ),
     );
@@ -35,6 +39,7 @@ class DailyGoalBottomSheet extends StatefulWidget {
 
 class _DailyGoalBottomSheetState extends State<DailyGoalBottomSheet> {
   late int _selectedMinutes;
+  late bool _enforceRestriction;
 
   final List<int> _presetOptions = const [90, 120, 150, 180, 240];
 
@@ -42,6 +47,7 @@ class _DailyGoalBottomSheetState extends State<DailyGoalBottomSheet> {
   void initState() {
     super.initState();
     _selectedMinutes = widget.initialMinutes;
+    _enforceRestriction = widget.initialEnforceRestriction;
   }
 
   @override
@@ -169,7 +175,45 @@ class _DailyGoalBottomSheetState extends State<DailyGoalBottomSheet> {
                 setState(() => _selectedMinutes = val.round());
               },
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
+
+            // Enforce Restriction Toggle
+            Container(
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: _enforceRestriction
+                      ? theme.colorScheme.primary.withValues(alpha: 0.5)
+                      : theme.colorScheme.outlineVariant.withValues(alpha: 0.4),
+                ),
+              ),
+              child: SwitchListTile.adaptive(
+                value: _enforceRestriction,
+                onChanged: (val) {
+                  setState(() => _enforceRestriction = val);
+                },
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                title: Text(
+                  'Enforce Restriction When Reached',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                subtitle: Text(
+                  'Block non-essential apps when today\'s screen time reaches target. Phone, Messages, and Settings remain open.',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                secondary: Icon(
+                  _enforceRestriction ? Icons.shield_rounded : Icons.shield_outlined,
+                  color: _enforceRestriction ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
 
             // Actions
             Row(
@@ -182,7 +226,7 @@ class _DailyGoalBottomSheetState extends State<DailyGoalBottomSheet> {
                 const SizedBox(width: 8),
                 FilledButton(
                   onPressed: () {
-                    widget.onSaved(_selectedMinutes);
+                    widget.onSaved(_selectedMinutes, _enforceRestriction);
                     Navigator.of(context).pop();
                   },
                   child: const Text('Set Daily Target'),

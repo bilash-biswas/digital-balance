@@ -66,6 +66,12 @@ class EnforcementPlatformBridge(
                 WorkManagerScheduler.cancelPeriodicSync(context)
                 result.success(true)
             }
+            "setDailyTargetEnforcement" -> {
+                val enabled = call.argument<Boolean>("enabled") ?: false
+                val targetMinutes = call.argument<Int>("targetMinutes") ?: 180
+                coordinator.setDailyTargetConfig(enabled, targetMinutes)
+                result.success(true)
+            }
             else -> {
                 result.notImplemented()
             }

@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.os.Build
+import java.util.Calendar
 
 class UsageStatsReader(private val context: Context) {
 
@@ -392,5 +393,25 @@ class UsageStatsReader(private val context: Context) {
             "hourlyForegroundTimeMs" to hourlyForegroundTime.toList(),
             "hourlyUnlocks" to hourlyUnlocks.toList()
         )
+    }
+
+    fun getTodayTotalMinutes(): Int {
+        val calendar = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        val startTime = calendar.timeInMillis
+        val endTime = System.currentTimeMillis()
+        val result = queryUsage(startTime, endTime)
+        @Suppress("UNCHECKED_CAST")
+        val apps = result["apps"] as? List<Map<String, Any>> ?: emptyList()
+        var totalMs = 0L
+        for (app in apps) {
+            val ms = (app["foregroundTimeMs"] as? Long) ?: ((app["foregroundTimeMs"] as? Number)?.toLong() ?: 0L)
+            totalMs += ms
+        }
+        return (totalMs / (1000 * 60)).toInt()
     }
 }

@@ -1,5 +1,6 @@
 package com.example.digitalbalance.digital_balance.enforcement
 
+import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.Typeface
@@ -171,12 +172,46 @@ class BlockerActivity : AppCompatActivity() {
                 ViewGroup.LayoutParams.WRAP_CONTENT
             )
             setOnClickListener {
-                unlockTemporarily()
+                onUnlockClicked(appName)
             }
         }
         rootLayout.addView(overrideButton)
 
         setContentView(rootLayout)
+    }
+
+    private fun onUnlockClicked(appName: String) {
+        val prefs = getSharedPreferences("digital_balance_enforcement_prefs", Context.MODE_PRIVATE)
+        val biometricRequired = prefs.getBoolean("biometric_override_enabled", false)
+
+        if (biometricRequired && androidx.biometric.BiometricManager.from(this).canAuthenticate(
+                androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_STRONG or
+                androidx.biometric.BiometricManager.Authenticators.DEVICE_CREDENTIAL
+            ) == androidx.biometric.BiometricManager.BIOMETRIC_SUCCESS
+        ) {
+            val executor = androidx.core.content.ContextCompat.getMainExecutor(this)
+            val prompt = androidx.biometric.BiometricPrompt(
+                this,
+                executor,
+                object : androidx.biometric.BiometricPrompt.AuthenticationCallback() {
+                    override fun onAuthenticationSucceeded(result: androidx.biometric.BiometricPrompt.AuthenticationResult) {
+                        super.onAuthenticationSucceeded(result)
+                        unlockTemporarily()
+                    }
+                }
+            )
+            val promptInfo = androidx.biometric.BiometricPrompt.PromptInfo.Builder()
+                .setTitle("Unlock App")
+                .setSubtitle("Authenticate to unlock $appName for 5 minutes")
+                .setAllowedAuthenticators(
+                    androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_STRONG or
+                    androidx.biometric.BiometricManager.Authenticators.DEVICE_CREDENTIAL
+                )
+                .build()
+            prompt.authenticate(promptInfo)
+        } else {
+            unlockTemporarily()
+        }
     }
 
     private fun navigateToHome() {

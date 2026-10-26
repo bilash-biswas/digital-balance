@@ -236,6 +236,22 @@ class PlatformBridge {
   }
 
   // Enforcement
+  Future<bool> setDailyTargetEnforcement({
+    required bool enabled,
+    required int targetMinutes,
+  }) async {
+    try {
+      final res = await _enforcementChannel.invokeMethod<bool>(
+        'setDailyTargetEnforcement',
+        {'enabled': enabled, 'targetMinutes': targetMinutes},
+      );
+      return res ?? false;
+    } catch (e, st) {
+      AppLogger.error('Failed to set daily target enforcement', e, st);
+      return false;
+    }
+  }
+
   Future<bool> syncRules(String policiesJson) async {
     try {
       final res = await _enforcementChannel.invokeMethod<bool>('syncRules', {

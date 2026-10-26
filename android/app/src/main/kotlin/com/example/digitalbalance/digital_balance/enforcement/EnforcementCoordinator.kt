@@ -2,8 +2,13 @@ package com.example.digitalbalance.digital_balance.enforcement
 
 import android.app.usage.UsageStatsManager
 import android.content.Context
+import android.content.Intent
 import android.content.SharedPreferences
+import android.content.pm.PackageManager
 import android.os.Build
+import android.provider.Telephony
+import android.telecom.TelecomManager
+import com.example.digitalbalance.digital_balance.usage.UsageStatsReader
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.Calendar
@@ -21,8 +26,15 @@ class EnforcementCoordinator(private val context: Context) {
     private val prefs: SharedPreferences =
         context.getSharedPreferences("digital_balance_enforcement_prefs", Context.MODE_PRIVATE)
 
+    private val usageReader = UsageStatsReader(context)
     private val policies = ConcurrentHashMap<String, RestrictionPolicy>()
     private val overrides = ConcurrentHashMap<String, Long>() // packageName -> overrideUntilMs
+
+    private var dailyTargetEnforcementEnabled: Boolean = false
+    private var dailyTargetLimitMinutes: Int = 180
+
+    @Volatile private var cachedTodayMinutes: Int = 0
+    @Volatile private var lastTodayMinutesFetchMs: Long = 0L
 
     init {
         loadFromPrefs()
@@ -42,7 +54,20 @@ class EnforcementCoordinator(private val context: Context) {
         } catch (_: Exception) {}
     }
 
+    fun setDailyTargetConfig(enabled: Boolean, targetMinutes: Int) {
+        dailyTargetEnforcementEnabled = enabled
+        dailyTargetLimitMinutes = targetMinutes
+        prefs.edit()
+            .putBoolean("daily_target_enforcement_enabled", enabled)
+            .putInt("daily_target_limit_minutes", targetMinutes)
+            .apply()
+        lastTodayMinutesFetchMs = 0L // invalidate cache to recompute
+    }
+
     private fun loadFromPrefs() {
+        dailyTargetEnforcementEnabled = prefs.getBoolean("daily_target_enforcement_enabled", false)
+        dailyTargetLimitMinutes = prefs.getInt("daily_target_limit_minutes", 180)
+
         val jsonStr = prefs.getString("policies_json", null) ?: return
         try {
             val array = JSONArray(jsonStr)
@@ -69,6 +94,47 @@ class EnforcementCoordinator(private val context: Context) {
             overrides.remove(packageName)
             return false
         }
+    }
+
+    fun getTodayTotalMinutesCached(): Int {
+        val now = System.currentTimeMillis()
+        if (now - lastTodayMinutesFetchMs > 20_000L) {
+            cachedTodayMinutes = usageReader.getTodayTotalMinutes()
+            lastTodayMinutesFetchMs = now
+        }
+        return cachedTodayMinutes
+    }
+
+    fun isEssentialPackage(packageName: String): Boolean {
+        if (packageName == context.packageName) return true
+        if (packageName == "com.android.systemui") return true
+        if (packageName == "com.android.settings") return true
+        if (packageName == "com.android.emergency") return true
+        if (packageName == "com.android.packageinstaller" || packageName == "com.google.android.packageinstaller") return true
+        if (packageName == "com.google.android.gms") return true
+
+        // Home launcher
+        val homeIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+        val homeResolve = context.packageManager.resolveActivity(homeIntent, PackageManager.MATCH_DEFAULT_ONLY)
+        if (homeResolve?.activityInfo?.packageName == packageName) return true
+
+        // Default Phone dialer
+        val telecom = context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager
+        if (telecom?.defaultDialerPackage == packageName) return true
+
+        // Default SMS
+        val defaultSms = Telephony.Sms.getDefaultSmsPackage(context)
+        if (defaultSms == packageName) return true
+
+        // Known clock / alarms
+        val clockPackages = setOf(
+            "com.google.android.deskclock",
+            "com.android.deskclock",
+            "com.sec.android.app.clockpackage"
+        )
+        if (clockPackages.contains(packageName)) return true
+
+        return false
     }
 
     fun evaluatePackage(packageName: String): RestrictionResult? {
@@ -100,10 +166,11 @@ class EnforcementCoordinator(private val context: Context) {
             else -> 1
         }
 
+        // 1. Evaluate explicit app timer rules first
         for (policy in policies.values) {
             if (!policy.packages.contains(packageName)) continue
 
-            // 1. Temporary Block
+            // Temporary Block
             if (policy.isTemporaryBlock && now < policy.tempBlockUntilMs) {
                 return RestrictionResult(
                     isBlocked = true,
@@ -113,14 +180,12 @@ class EnforcementCoordinator(private val context: Context) {
                 )
             }
 
-            // 2. Schedule Window check (day of week + time of day)
+            // Schedule Window check (day of week + time of day)
             val matchesDay = policy.daysOfWeek.isEmpty() || policy.daysOfWeek.contains(dayOfWeek)
             if (matchesDay && policy.startMinuteOfDay >= 0 && policy.endMinuteOfDay >= 0) {
                 val inSchedule = if (policy.startMinuteOfDay < policy.endMinuteOfDay) {
-                    // Daytime schedule, e.g. 09:00 (540) to 17:00 (1020)
                     minuteOfDay in policy.startMinuteOfDay until policy.endMinuteOfDay
                 } else {
-                    // Overnight schedule, e.g. 22:00 (1320) to 07:00 (420)
                     minuteOfDay >= policy.startMinuteOfDay || minuteOfDay < policy.endMinuteOfDay
                 }
 
@@ -134,7 +199,7 @@ class EnforcementCoordinator(private val context: Context) {
                 }
             }
 
-            // 3. Daily Usage Limit check
+            // Daily Usage Limit check for specific policy
             if (policy.limitMinutesPerDay > 0) {
                 val usageMinutes = getTodayUsageMinutes(packageName)
                 if (usageMinutes >= policy.limitMinutesPerDay) {
@@ -143,6 +208,24 @@ class EnforcementCoordinator(private val context: Context) {
                         ruleId = policy.ruleId,
                         ruleName = policy.ruleName,
                         reason = "Daily limit of ${policy.limitMinutesPerDay} minutes reached"
+                    )
+                }
+            }
+        }
+
+        // 2. Evaluate overall Daily Screen Time Target Enforcement
+        if (dailyTargetEnforcementEnabled && dailyTargetLimitMinutes > 0) {
+            if (!isEssentialPackage(packageName)) {
+                val todayMinutes = getTodayTotalMinutesCached()
+                if (todayMinutes >= dailyTargetLimitMinutes) {
+                    val goalHours = dailyTargetLimitMinutes / 60
+                    val goalMins = dailyTargetLimitMinutes % 60
+                    val targetStr = if (goalHours > 0 && goalMins > 0) "${goalHours}h ${goalMins}m" else if (goalHours > 0) "${goalHours}h" else "${goalMins}m"
+                    return RestrictionResult(
+                        isBlocked = true,
+                        ruleId = "__daily_target__",
+                        ruleName = "Daily Screen Time Target",
+                        reason = "You have reached your daily screen time target of $targetStr. Non-essential apps are paused."
                     )
                 }
             }

@@ -19,6 +19,7 @@ class SettingsScreen extends ConsumerStatefulWidget {
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   int _dailyGoalMinutes = 180;
   bool _biometricOverride = false;
+  bool _enforceDailyTarget = false;
   bool _isLoading = true;
   bool _isCheckingUpdate = false;
   String _currentVersion = AppConstants.appVersion;
@@ -33,6 +34,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final settingsRepo = ref.read(settingsRepositoryProvider);
     final goal = await settingsRepo.getDailyGoalMinutes();
     final bio = await settingsRepo.isBiometricOverrideEnabled();
+    final enforce = await settingsRepo.isDailyTargetRestrictionEnabled();
     final bridge = PlatformBridge();
     final ver = await bridge.getAppVersion();
 
@@ -40,6 +42,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       setState(() {
         _dailyGoalMinutes = goal;
         _biometricOverride = bio;
+        _enforceDailyTarget = enforce;
         _currentVersion = ver;
         _isLoading = false;
       });
@@ -120,9 +123,38 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   onChanged: (val) {
                     setState(() => _dailyGoalMinutes = val.round());
                   },
-                  onChangeEnd: (val) {
-                    settingsRepo.setDailyGoalMinutes(val.round());
+                  onChangeEnd: (val) async {
+                    await settingsRepo.setDailyGoalMinutes(val.round());
+                    if (_enforceDailyTarget) {
+                      final bridge = PlatformBridge();
+                      await bridge.setDailyTargetEnforcement(
+                        enabled: true,
+                        targetMinutes: val.round(),
+                      );
+                    }
                   },
+                ),
+                const Divider(height: 24),
+                SwitchListTile.adaptive(
+                  contentPadding: EdgeInsets.zero,
+                  value: _enforceDailyTarget,
+                  onChanged: (val) async {
+                    setState(() => _enforceDailyTarget = val);
+                    await settingsRepo.setDailyTargetRestrictionEnabled(val);
+                    final bridge = PlatformBridge();
+                    await bridge.setDailyTargetEnforcement(
+                      enabled: val,
+                      targetMinutes: _dailyGoalMinutes,
+                    );
+                  },
+                  title: const Text(
+                    'Enforce Daily Target Restriction',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                  ),
+                  subtitle: const Text(
+                    'Lock non-essential apps when today\'s screen time exceeds target. Phone, Messages, and Settings remain open.',
+                    style: TextStyle(fontSize: 11),
+                  ),
                 ),
               ],
             ),
