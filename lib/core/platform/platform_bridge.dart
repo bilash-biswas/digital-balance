@@ -103,6 +103,18 @@ class PlatformBridge {
   );
 
   // Permissions & Settings
+  Future<String> getAppVersion() async {
+    try {
+      final res = await _usageChannel
+          .invokeMethod<String>('getAppVersion')
+          .timeout(const Duration(milliseconds: 200));
+      if (res != null && res.isNotEmpty) {
+        return res;
+      }
+    } catch (_) {}
+    return AppConstants.appVersion;
+  }
+
   Future<Map<String, bool>> getPermissionStatuses() async {
     try {
       final res = await _usageChannel.invokeMapMethod<String, bool>(

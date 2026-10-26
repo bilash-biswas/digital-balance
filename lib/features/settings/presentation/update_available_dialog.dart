@@ -158,7 +158,7 @@ class _UpdateAvailableDialogState extends State<UpdateAvailableDialog> {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  '(Current: v${AppConstants.appVersion})',
+                  '(Current: v${widget.updateInfo.currentVersion})',
                   style: TextStyle(
                     fontSize: 12,
                     color: theme.colorScheme.onSurfaceVariant,

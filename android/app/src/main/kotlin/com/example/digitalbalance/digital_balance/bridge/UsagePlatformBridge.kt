@@ -134,6 +134,19 @@ class UsagePlatformBridge(
                     result.success(false)
                 }
             }
+            "getAppVersion" -> {
+                try {
+                    val pInfo = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                        context.packageManager.getPackageInfo(context.packageName, android.content.pm.PackageManager.PackageInfoFlags.of(0))
+                    } else {
+                        @Suppress("DEPRECATION")
+                        context.packageManager.getPackageInfo(context.packageName, 0)
+                    }
+                    result.success(pInfo.versionName ?: "")
+                } catch (e: Exception) {
+                    result.error("VERSION_ERROR", e.message, null)
+                }
+            }
             else -> {
                 result.notImplemented()
             }

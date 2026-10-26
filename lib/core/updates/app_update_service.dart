@@ -7,6 +7,7 @@ import '../platform/platform_bridge.dart';
 
 class UpdateInfo {
   final String latestVersion;
+  final String currentVersion;
   final String changelog;
   final String downloadUrl;
   final String publishedAt;
@@ -14,6 +15,7 @@ class UpdateInfo {
 
   const UpdateInfo({
     required this.latestVersion,
+    required this.currentVersion,
     required this.changelog,
     required this.downloadUrl,
     required this.publishedAt,
@@ -93,10 +95,12 @@ class AppUpdateService {
           }
         }
 
+        final currentVer = await _bridge.getAppVersion();
         if (downloadUrl != null &&
-            isNewerVersion(cleanTag, AppConstants.appVersion)) {
+            isNewerVersion(cleanTag, currentVer)) {
           return UpdateInfo(
             latestVersion: cleanTag,
+            currentVersion: currentVer,
             changelog: changelog,
             downloadUrl: downloadUrl,
             publishedAt: publishedAt,

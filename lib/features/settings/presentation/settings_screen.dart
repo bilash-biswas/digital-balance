@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/localization/app_strings.dart';
 import '../../../app/providers.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/platform/platform_bridge.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/balance_card.dart';
 import 'update_available_dialog.dart';
@@ -20,6 +21,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _biometricOverride = false;
   bool _isLoading = true;
   bool _isCheckingUpdate = false;
+  String _currentVersion = AppConstants.appVersion;
 
   @override
   void initState() {
@@ -31,11 +33,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final settingsRepo = ref.read(settingsRepositoryProvider);
     final goal = await settingsRepo.getDailyGoalMinutes();
     final bio = await settingsRepo.isBiometricOverrideEnabled();
+    final bridge = PlatformBridge();
+    final ver = await bridge.getAppVersion();
 
     if (mounted) {
       setState(() {
         _dailyGoalMinutes = goal;
         _biometricOverride = bio;
+        _currentVersion = ver;
         _isLoading = false;
       });
     }
@@ -243,7 +248,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       ),
                     ),
                     Chip(
-                      label: const Text('v${AppConstants.appVersion}'),
+                      label: Text('v$_currentVersion'),
                       backgroundColor:
                           theme.colorScheme.surfaceContainerHighest,
                     ),
