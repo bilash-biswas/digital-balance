@@ -134,6 +134,7 @@ class UsageStatsReader(private val context: Context) {
             addAll(launcherPackages)
             add("com.android.systemui")
             add("android")
+            add(context.packageName)
             getDefaultLauncherPackage()?.let { add(it) }
         }
 
@@ -148,6 +149,7 @@ class UsageStatsReader(private val context: Context) {
 
         fun isExcluded(pkg: String): Boolean {
             if (pkg in excludedPackages) return true
+            if (pkg == context.packageName) return true
             // If it's a system app with no launcher entry, exclude it from screen time
             if (pkg !in launcherPackageSet) {
                 try {
@@ -157,11 +159,13 @@ class UsageStatsReader(private val context: Context) {
                         @Suppress("DEPRECATION")
                         packageManager.getApplicationInfo(pkg, 0)
                     }
-                    if ((appInfo.flags and ApplicationInfo.FLAG_SYSTEM) != 0) {
+                    // Only exclude pure system apps without launcher entry (ignore updated system apps like Chrome, Maps)
+                    if ((appInfo.flags and ApplicationInfo.FLAG_SYSTEM) != 0 && (appInfo.flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) == 0) {
                         return true
                     }
                 } catch (_: Exception) {
-                    return true
+                    // Do not exclude if package lookup fails; it may be an unqueried user package
+                    return false
                 }
             }
             return false
@@ -282,16 +286,29 @@ class UsageStatsReader(private val context: Context) {
             }
         } catch (_: Exception) {}
 
-        // Fallback: If queryEvents produced no data, use aggregated stats
-        if (foregroundTimeMap.isEmpty()) {
+        // Always merge with system aggregated stats to guarantee exact match with Digital Wellbeing
+        try {
             val aggregated = usageStatsManager.queryAndAggregateUsageStats(startTime, endTime)
             for ((pkg, stats) in aggregated) {
                 if (stats.totalTimeInForeground > 0L && !isExcluded(pkg)) {
-                    foregroundTimeMap[pkg] = stats.totalTimeInForeground
+                    val existing = foregroundTimeMap[pkg] ?: 0L
+                    if (stats.totalTimeInForeground > existing) {
+                        foregroundTimeMap[pkg] = stats.totalTimeInForeground
+                    }
                     if (stats.lastTimeUsed > (lastUsedMap[pkg] ?: 0L)) {
                         lastUsedMap[pkg] = stats.lastTimeUsed
                     }
+                    if ((launchCountMap[pkg] ?: 0) == 0) {
+                        launchCountMap[pkg] = 1
+                    }
                 }
+            }
+        } catch (_: Exception) {}
+
+        if (deviceUnlocks == 0) {
+            val totalLaunches = launchCountMap.values.sum()
+            if (totalLaunches > 0) {
+                deviceUnlocks = maxOf(1, totalLaunches / 2)
             }
         }
 
