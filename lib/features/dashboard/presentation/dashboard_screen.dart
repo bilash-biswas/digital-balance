@@ -400,6 +400,47 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                                           ),
                                         ),
                                       ),
+                                      if (percent >= 100 && isRestricted) ...[
+                                        const SizedBox(height: 10),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 10,
+                                            vertical: 8,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: theme.colorScheme.errorContainer
+                                                .withValues(alpha: 0.7),
+                                            borderRadius:
+                                                BorderRadius.circular(8),
+                                            border: Border.all(
+                                              color: theme.colorScheme.error
+                                                  .withValues(alpha: 0.4),
+                                            ),
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              Icon(
+                                                Icons.lock_clock_rounded,
+                                                size: 16,
+                                                color: theme.colorScheme.error,
+                                              ),
+                                              const SizedBox(width: 8),
+                                              Expanded(
+                                                child: Text(
+                                                  'Target reached! Non-essential apps (social, games, browsers) are paused. Phone, SMS, and Settings remain open.',
+                                                  style: TextStyle(
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: theme
+                                                        .colorScheme
+                                                        .onErrorContainer,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
                                     ],
                                   ),
                                 ),

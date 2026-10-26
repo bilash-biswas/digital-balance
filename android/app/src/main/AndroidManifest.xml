@@ -15,11 +15,15 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
-    <!-- Package Visibility: Discovers installed launcher applications for the App Catalog -->
+    <!-- Package Visibility: Discovers installed launcher applications for the App Catalog & Home Launcher -->
     <queries>
         <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.HOME" />
         </intent>
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT" />

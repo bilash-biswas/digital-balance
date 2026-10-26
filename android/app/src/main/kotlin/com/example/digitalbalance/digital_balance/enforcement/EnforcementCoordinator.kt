@@ -60,8 +60,9 @@ class EnforcementCoordinator(private val context: Context) {
         prefs.edit()
             .putBoolean("daily_target_enforcement_enabled", enabled)
             .putInt("daily_target_limit_minutes", targetMinutes)
-            .apply()
+            .commit()
         lastTodayMinutesFetchMs = 0L // invalidate cache to recompute
+        android.util.Log.i("DigitalBalanceService", "Daily target config updated: enabled=$enabled, targetMinutes=$targetMinutes")
     }
 
     private fun loadFromPrefs() {
@@ -107,24 +108,50 @@ class EnforcementCoordinator(private val context: Context) {
 
     fun isEssentialPackage(packageName: String): Boolean {
         if (packageName == context.packageName) return true
-        if (packageName == "com.android.systemui") return true
-        if (packageName == "com.android.settings") return true
+        if (packageName == "com.android.systemui" || packageName == "com.google.android.systemui") return true
+        if (packageName == "com.android.settings" || packageName == "com.google.android.settings") return true
         if (packageName == "com.android.emergency") return true
         if (packageName == "com.android.packageinstaller" || packageName == "com.google.android.packageinstaller") return true
         if (packageName == "com.google.android.gms") return true
 
-        // Home launcher
-        val homeIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
-        val homeResolve = context.packageManager.resolveActivity(homeIntent, PackageManager.MATCH_DEFAULT_ONLY)
-        if (homeResolve?.activityInfo?.packageName == packageName) return true
+        // Known launcher packages across Pixel, Samsung, Xiaomi, Motorola, Transsion, etc.
+        val knownLaunchers = setOf(
+            "com.google.android.apps.nexuslauncher",
+            "com.android.launcher3",
+            "com.android.launcher",
+            "com.sec.android.app.launcher",
+            "com.miui.home",
+            "com.huawei.android.launcher",
+            "com.oppo.launcher",
+            "com.oneplus.launcher",
+            "com.coloros.launcher",
+            "com.transsion.hilauncher",
+            "com.transsion.itel.launcher",
+            "com.transsion.xos.launcher",
+            "com.teslacoilsw.launcher",
+            "com.microsoft.launcher",
+            "com.motorola.launcher3"
+        )
+        if (knownLaunchers.contains(packageName)) return true
+
+        // Dynamic Home launcher lookup
+        try {
+            val homeIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+            val homeResolve = context.packageManager.resolveActivity(homeIntent, PackageManager.MATCH_DEFAULT_ONLY)
+            if (homeResolve?.activityInfo?.packageName == packageName) return true
+        } catch (_: Exception) {}
 
         // Default Phone dialer
-        val telecom = context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager
-        if (telecom?.defaultDialerPackage == packageName) return true
+        try {
+            val telecom = context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager
+            if (telecom?.defaultDialerPackage == packageName) return true
+        } catch (_: Exception) {}
 
         // Default SMS
-        val defaultSms = Telephony.Sms.getDefaultSmsPackage(context)
-        if (defaultSms == packageName) return true
+        try {
+            val defaultSms = Telephony.Sms.getDefaultSmsPackage(context)
+            if (defaultSms == packageName) return true
+        } catch (_: Exception) {}
 
         // Known clock / alarms
         val clockPackages = setOf(
@@ -138,8 +165,8 @@ class EnforcementCoordinator(private val context: Context) {
     }
 
     fun evaluatePackage(packageName: String): RestrictionResult? {
-        // Exclude system UI and self
-        if (packageName == context.packageName || packageName == "com.android.systemui") {
+        // Exclude self, system UI, launchers, and essential safety apps
+        if (isEssentialPackage(packageName)) {
             return null
         }
 
@@ -215,19 +242,18 @@ class EnforcementCoordinator(private val context: Context) {
 
         // 2. Evaluate overall Daily Screen Time Target Enforcement
         if (dailyTargetEnforcementEnabled && dailyTargetLimitMinutes > 0) {
-            if (!isEssentialPackage(packageName)) {
-                val todayMinutes = getTodayTotalMinutesCached()
-                if (todayMinutes >= dailyTargetLimitMinutes) {
-                    val goalHours = dailyTargetLimitMinutes / 60
-                    val goalMins = dailyTargetLimitMinutes % 60
-                    val targetStr = if (goalHours > 0 && goalMins > 0) "${goalHours}h ${goalMins}m" else if (goalHours > 0) "${goalHours}h" else "${goalMins}m"
-                    return RestrictionResult(
-                        isBlocked = true,
-                        ruleId = "__daily_target__",
-                        ruleName = "Daily Screen Time Target",
-                        reason = "You have reached your daily screen time target of $targetStr. Non-essential apps are paused."
-                    )
-                }
+            val todayMinutes = getTodayTotalMinutesCached()
+            android.util.Log.d("DigitalBalanceService", "Evaluating $packageName: todayMinutes=$todayMinutes, target=$dailyTargetLimitMinutes")
+            if (todayMinutes >= dailyTargetLimitMinutes) {
+                val goalHours = dailyTargetLimitMinutes / 60
+                val goalMins = dailyTargetLimitMinutes % 60
+                val targetStr = if (goalHours > 0 && goalMins > 0) "${goalHours}h ${goalMins}m" else if (goalHours > 0) "${goalHours}h" else "${goalMins}m"
+                return RestrictionResult(
+                    isBlocked = true,
+                    ruleId = "__daily_target__",
+                    ruleName = "Daily Screen Time Target",
+                    reason = "You have reached your daily screen time target of $targetStr. Non-essential apps are paused."
+                )
             }
         }
 

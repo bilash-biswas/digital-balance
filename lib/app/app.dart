@@ -2,15 +2,40 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../core/platform/platform_bridge.dart';
 import 'providers.dart';
 import 'router.dart';
 import 'theme/app_theme.dart';
 
-class DigitalBalanceApp extends ConsumerWidget {
+class DigitalBalanceApp extends ConsumerStatefulWidget {
   const DigitalBalanceApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<DigitalBalanceApp> createState() => _DigitalBalanceAppState();
+}
+
+class _DigitalBalanceAppState extends ConsumerState<DigitalBalanceApp> {
+  @override
+  void initState() {
+    super.initState();
+    Future.microtask(() async {
+      try {
+        final settingsRepo = ref.read(settingsRepositoryProvider);
+        final goal = await settingsRepo.getDailyGoalMinutes();
+        final enforced = await settingsRepo.isDailyTargetRestrictionEnabled();
+        final bridge = PlatformBridge();
+        await bridge.setDailyTargetEnforcement(
+          enabled: enforced,
+          targetMinutes: goal,
+        );
+        final restrictionRepo = ref.read(restrictionRepositoryProvider);
+        await restrictionRepo.syncActiveRulesToPlatform();
+      } catch (_) {}
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final router = ref.watch(routerProvider);
     final themeMode = ref.watch(themeModeControllerProvider);
     final locale = ref.watch(localeControllerProvider);

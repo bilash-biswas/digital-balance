@@ -1,6 +1,6 @@
 class AppConstants {
   static const String appName = 'Digital Balance';
-  static const String appVersion = '1.0.8';
+  static const String appVersion = '1.0.9';
   static const int schemaVersion = 1;
 
   // Platform Channels

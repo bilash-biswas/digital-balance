@@ -33,10 +33,11 @@ class BlockerActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        targetPackage = intent.getStringExtra(EXTRA_PACKAGE_NAME) ?: ""
-        ruleId = intent.getStringExtra(EXTRA_RULE_ID) ?: ""
-        ruleName = intent.getStringExtra(EXTRA_RULE_NAME) ?: "Digital Balance"
-        reason = intent.getStringExtra(EXTRA_REASON) ?: "Application is currently restricted."
+        extractIntent(intent)
+        if (shouldDismissForPackage(targetPackage)) {
+            finish()
+            return
+        }
 
         // Handle back button: return to device home rather than popping to blocked app
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
@@ -46,6 +47,30 @@ class BlockerActivity : AppCompatActivity() {
         })
 
         buildUi()
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        extractIntent(intent)
+        if (shouldDismissForPackage(targetPackage)) {
+            finish()
+            return
+        }
+        buildUi()
+    }
+
+    private fun extractIntent(intent: Intent) {
+        targetPackage = intent.getStringExtra(EXTRA_PACKAGE_NAME) ?: ""
+        ruleId = intent.getStringExtra(EXTRA_RULE_ID) ?: ""
+        ruleName = intent.getStringExtra(EXTRA_RULE_NAME) ?: "Digital Balance"
+        reason = intent.getStringExtra(EXTRA_REASON) ?: "Application is currently restricted."
+    }
+
+    private fun shouldDismissForPackage(pkg: String): Boolean {
+        if (pkg.isEmpty()) return true
+        val coordinator = EnforcementCoordinator.getInstance(this)
+        return coordinator.isEssentialPackage(pkg)
     }
 
     private fun buildUi() {
@@ -217,7 +242,7 @@ class BlockerActivity : AppCompatActivity() {
     private fun navigateToHome() {
         val homeIntent = Intent(Intent.ACTION_MAIN).apply {
             addCategory(Intent.CATEGORY_HOME)
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED
         }
         startActivity(homeIntent)
         finish()
