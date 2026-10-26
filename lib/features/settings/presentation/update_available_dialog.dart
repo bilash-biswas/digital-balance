@@ -36,8 +36,28 @@ class _UpdateAvailableDialogState extends State<UpdateAvailableDialog> {
   double _progress = 0.0;
   String _statusText = '';
   String? _errorMessage;
+  String? _cachedDownloadedPath;
 
   Future<void> _startDownloadAndInstall() async {
+    // If already downloaded, check permission and launch installer immediately
+    if (_cachedDownloadedPath != null) {
+      final canInstall = await widget.updateService.canRequestPackageInstalls();
+      if (!canInstall) {
+        setState(() {
+          _errorMessage =
+              'Please enable "Allow from this source" in Settings, then tap Install Now.';
+        });
+        await widget.updateService.openManageUnknownAppSources();
+        return;
+      }
+
+      final launched = await widget.updateService.installApk(_cachedDownloadedPath!);
+      if (launched && mounted) {
+        Navigator.of(context).pop();
+      }
+      return;
+    }
+
     setState(() {
       _isDownloading = true;
       _progress = 0.0;
@@ -60,23 +80,21 @@ class _UpdateAvailableDialogState extends State<UpdateAvailableDialog> {
 
       if (!mounted) return;
 
-      setState(() {
-        _statusText = 'Verifying installer permissions...';
-      });
+      _cachedDownloadedPath = file.path;
 
       // Check if permission to install unknown apps is granted
       final canInstall =
           await widget.updateService.canRequestPackageInstalls();
       if (!canInstall) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Please allow installing apps from this source, then tap Install.',
-            ),
-          ),
-        );
+        setState(() {
+          _isDownloading = false;
+          _statusText = 'Permission needed: Allow from this source';
+          _errorMessage =
+              'Please turn ON "Allow from this source" in Android Settings, then tap "Install Now".';
+        });
         await widget.updateService.openManageUnknownAppSources();
+        return;
       }
 
       setState(() {
@@ -87,7 +105,7 @@ class _UpdateAvailableDialogState extends State<UpdateAvailableDialog> {
       if (!launched) {
         setState(() {
           _errorMessage =
-              'Could not launch installer. Please check app storage permissions.';
+              'Could not launch installer. Please check app permissions.';
           _isDownloading = false;
         });
       } else {
@@ -213,8 +231,19 @@ class _UpdateAvailableDialogState extends State<UpdateAvailableDialog> {
             child: const Text('Later'),
           ),
         FilledButton.icon(
-          icon: const Icon(Icons.download_rounded, size: 18),
-          label: Text(_isDownloading ? 'Installing...' : 'Download & Install'),
+          icon: Icon(
+            _cachedDownloadedPath != null
+                ? Icons.system_update_alt_rounded
+                : Icons.download_rounded,
+            size: 18,
+          ),
+          label: Text(
+            _isDownloading
+                ? 'Downloading...'
+                : (_cachedDownloadedPath != null
+                    ? 'Install Now'
+                    : 'Download & Install'),
+          ),
           onPressed: _isDownloading ? null : _startDownloadAndInstall,
         ),
       ],
