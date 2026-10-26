@@ -257,9 +257,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 style: TextStyle(fontSize: 12),
               ),
               value: _biometricOverride,
-              onChanged: (val) {
+              onChanged: (val) async {
                 setState(() => _biometricOverride = val);
-                settingsRepo.setBiometricOverrideEnabled(val);
+                await settingsRepo.setBiometricOverrideEnabled(val);
+                final bridge = PlatformBridge();
+                await bridge.setBiometricOverride(enabled: val);
               },
             ),
           ),

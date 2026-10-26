@@ -72,6 +72,12 @@ class EnforcementPlatformBridge(
                 coordinator.setDailyTargetConfig(enabled, targetMinutes)
                 result.success(true)
             }
+            "setBiometricOverride" -> {
+                val enabled = call.argument<Boolean>("enabled") ?: true
+                val prefs = context.getSharedPreferences("digital_balance_enforcement_prefs", Context.MODE_PRIVATE)
+                prefs.edit().putBoolean("biometric_override_enabled", enabled).commit()
+                result.success(true)
+            }
             else -> {
                 result.notImplemented()
             }

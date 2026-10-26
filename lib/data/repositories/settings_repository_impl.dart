@@ -86,7 +86,14 @@ class SettingsRepository {
 
   Future<bool> isBiometricOverrideEnabled() async {
     final val = await getSetting('biometric_override');
-    return val == 'true';
+    return val != 'false'; // Enabled by default
+  }
+
+  Stream<bool> watchBiometricOverrideEnabled() {
+    return (_db.select(_db.userSettings)
+          ..where((tbl) => tbl.key.equals('biometric_override')))
+        .watchSingleOrNull()
+        .map((entry) => entry?.value != 'false');
   }
 
   Future<void> setBiometricOverrideEnabled(bool enabled) async {

@@ -207,13 +207,14 @@ class BlockerActivity : AppCompatActivity() {
 
     private fun onUnlockClicked(appName: String) {
         val prefs = getSharedPreferences("digital_balance_enforcement_prefs", Context.MODE_PRIVATE)
-        val biometricRequired = prefs.getBoolean("biometric_override_enabled", false)
+        val biometricRequired = prefs.getBoolean("biometric_override_enabled", true)
 
-        if (biometricRequired && androidx.biometric.BiometricManager.from(this).canAuthenticate(
-                androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_STRONG or
-                androidx.biometric.BiometricManager.Authenticators.DEVICE_CREDENTIAL
-            ) == androidx.biometric.BiometricManager.BIOMETRIC_SUCCESS
-        ) {
+        val canAuthenticate = androidx.biometric.BiometricManager.from(this).canAuthenticate(
+            androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_STRONG or
+            androidx.biometric.BiometricManager.Authenticators.DEVICE_CREDENTIAL
+        )
+
+        if (biometricRequired && canAuthenticate == androidx.biometric.BiometricManager.BIOMETRIC_SUCCESS) {
             val executor = androidx.core.content.ContextCompat.getMainExecutor(this)
             val prompt = androidx.biometric.BiometricPrompt(
                 this,
@@ -223,11 +224,29 @@ class BlockerActivity : AppCompatActivity() {
                         super.onAuthenticationSucceeded(result)
                         unlockTemporarily()
                     }
+
+                    override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                        super.onAuthenticationError(errorCode, errString)
+                        android.widget.Toast.makeText(
+                            this@BlockerActivity,
+                            "Biometric required: $errString",
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                    }
+
+                    override fun onAuthenticationFailed() {
+                        super.onAuthenticationFailed()
+                        android.widget.Toast.makeText(
+                            this@BlockerActivity,
+                            "Biometric authentication failed. Try again.",
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                    }
                 }
             )
             val promptInfo = androidx.biometric.BiometricPrompt.PromptInfo.Builder()
-                .setTitle("Unlock App")
-                .setSubtitle("Authenticate to unlock $appName for 5 minutes")
+                .setTitle("Unlock $appName")
+                .setSubtitle("Confirm fingerprint or device lock to unlock for 5 minutes")
                 .setAllowedAuthenticators(
                     androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_STRONG or
                     androidx.biometric.BiometricManager.Authenticators.DEVICE_CREDENTIAL
@@ -251,6 +270,13 @@ class BlockerActivity : AppCompatActivity() {
     private fun unlockTemporarily() {
         if (targetPackage.isNotEmpty()) {
             EnforcementCoordinator.getInstance(this).grantOverride(targetPackage, ruleId, 5)
+            try {
+                val launchIntent = packageManager.getLaunchIntentForPackage(targetPackage)
+                if (launchIntent != null) {
+                    launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
+                    startActivity(launchIntent)
+                }
+            } catch (_: Exception) {}
         }
         finish()
     }

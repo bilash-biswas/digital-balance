@@ -28,6 +28,8 @@ class _DigitalBalanceAppState extends ConsumerState<DigitalBalanceApp> {
           enabled: enforced,
           targetMinutes: goal,
         );
+        final bio = await settingsRepo.isBiometricOverrideEnabled();
+        await bridge.setBiometricOverride(enabled: bio);
         final restrictionRepo = ref.read(restrictionRepositoryProvider);
         await restrictionRepo.syncActiveRulesToPlatform();
       } catch (_) {}

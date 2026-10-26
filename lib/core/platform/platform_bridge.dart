@@ -252,6 +252,19 @@ class PlatformBridge {
     }
   }
 
+  Future<bool> setBiometricOverride({required bool enabled}) async {
+    try {
+      final res = await _enforcementChannel.invokeMethod<bool>(
+        'setBiometricOverride',
+        {'enabled': enabled},
+      );
+      return res ?? false;
+    } catch (e, st) {
+      AppLogger.error('Failed to set biometric override', e, st);
+      return false;
+    }
+  }
+
   Future<bool> syncRules(String policiesJson) async {
     try {
       final res = await _enforcementChannel.invokeMethod<bool>('syncRules', {
