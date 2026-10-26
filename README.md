@@ -12,16 +12,20 @@ A production-grade, local-first Android digital wellbeing, screen-time managemen
 
 ## 📲 Download & Installation
 
-### Option 1: Direct Download
-Click below to download the latest production APK directly to your Android device:  
-👉 **[Download Digital Balance APK (Latest Release)](https://github.com/bilash-biswas/digital-balance/releases/latest/download/app-release.apk)**
+### Option 1: Direct APK Download
+- 🚀 **[Download Fast APK for Android (arm64-v8a - 22.6 MB)](https://github.com/bilash-biswas/digital-balance/releases/download/v1.0.0/app-arm64-v8a-release.apk)** *(Recommended for 99% of modern phones)*
+- 📦 **[Download Universal APK (All ABIs - 62.3 MB)](https://github.com/bilash-biswas/digital-balance/releases/download/v1.0.0/app-release.apk)**
+- 🌐 **[View Releases on GitHub](https://github.com/bilash-biswas/digital-balance/releases/tag/v1.0.0)**
 
-### Option 2: Scan to Download (Mobile QR Code)
-Point your Android camera at the QR code below to immediately download and install:
+### Option 2: Scan with Android Camera (QR Code)
+Scan the QR code below on your phone to open the release download page:
 
 <p align="center">
-  <img src="https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=8&data=https://github.com/bilash-biswas/digital-balance/releases/latest/download/app-release.apk" alt="Scan QR Code to Download APK" width="200" />
+  <img src="https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=8&data=https://github.com/bilash-biswas/digital-balance/releases/tag/v1.0.0" alt="Scan QR Code to Download APK" width="200" />
 </p>
+
+> [!TIP]
+> **Android Browser Note:** When downloading APK files directly, Android browsers (Brave/Chrome) pause briefly at 100% to show a security warning: *"File might be harmful. Do you want to download anyway?"*. Tap **"Download anyway"** to finish and tap **"Open"** to install.
 
 ### 🔄 In-App Self-Updating
 Digital Balance features an on-device update manager. When a new release tag is published on GitHub, open **Settings → App Version & Updates → Check for Updates** to inspect release notes and update seamlessly over your existing installation without losing any data.
