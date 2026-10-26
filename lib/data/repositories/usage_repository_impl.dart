@@ -89,11 +89,12 @@ class UsageRepository {
           if (app.appName.isNotEmpty) {
             await _db
                 .into(_db.appCatalog)
-                .insertOnConflictUpdate(
+                .insert(
                   AppCatalogCompanion.insert(
                     packageName: app.packageName,
                     appName: app.appName,
                   ),
+                  mode: InsertMode.insertOrIgnore,
                 );
           }
         }
@@ -120,15 +121,17 @@ class UsageRepository {
                   foregroundTimeMs: Value(ms),
                   deviceUnlocks: Value(unlocks),
                 ),
+                mode: InsertMode.insertOrReplace,
               );
         }
 
         // Record notifications count
-        await _db.into(_db.userSettings).insertOnConflictUpdate(
+        await _db.into(_db.userSettings).insert(
               UserSettingsCompanion.insert(
                 key: 'today_notifications_$todayStr',
                 value: result.notificationCount.toString(),
               ),
+              mode: InsertMode.insertOrReplace,
             );
 
         // Record success in sync state
@@ -185,11 +188,12 @@ class UsageRepository {
                 if (app.appName.isNotEmpty) {
                   await _db
                       .into(_db.appCatalog)
-                      .insertOnConflictUpdate(
+                      .insert(
                         AppCatalogCompanion.insert(
                           packageName: app.packageName,
                           appName: app.appName,
                         ),
+                        mode: InsertMode.insertOrIgnore,
                       );
                 }
               }
@@ -215,6 +219,7 @@ class UsageRepository {
                         foregroundTimeMs: Value(ms),
                         deviceUnlocks: Value(unlocks),
                       ),
+                      mode: InsertMode.insertOrReplace,
                     );
               }
             });

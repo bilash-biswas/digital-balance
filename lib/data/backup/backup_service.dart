@@ -163,11 +163,12 @@ class BackupService {
           final m = t as Map<String, dynamic>;
           await _db
               .into(_db.restrictionTargets)
-              .insertOnConflictUpdate(
+              .insert(
                 RestrictionTargetsCompanion.insert(
                   ruleId: m['ruleId'] as String,
                   packageName: m['packageName'] as String,
                 ),
+                mode: drift.InsertMode.insertOrIgnore,
               );
         }
 

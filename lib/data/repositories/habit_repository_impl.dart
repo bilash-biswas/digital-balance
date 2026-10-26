@@ -113,15 +113,29 @@ class HabitRepository {
             .get();
 
     if (entries.isEmpty) {
-      await _db
-          .into(_db.habitStreaks)
-          .insertOnConflictUpdate(
-            HabitStreaksCompanion.insert(
-              habitId: habitId,
-              currentStreak: const Value(0),
-              longestStreak: const Value(0),
-            ),
-          );
+      final existing = await (_db.select(_db.habitStreaks)
+            ..where((tbl) => tbl.habitId.equals(habitId)))
+          .getSingleOrNull();
+      if (existing == null) {
+        await _db
+            .into(_db.habitStreaks)
+            .insert(
+              HabitStreaksCompanion.insert(
+                habitId: habitId,
+                currentStreak: const Value(0),
+                longestStreak: const Value(0),
+              ),
+            );
+      } else {
+        await (_db.update(_db.habitStreaks)
+              ..where((tbl) => tbl.habitId.equals(habitId)))
+            .write(
+              const HabitStreaksCompanion(
+                currentStreak: Value(0),
+                longestStreak: Value(0),
+              ),
+            );
+      }
       return;
     }
 
@@ -175,16 +189,32 @@ class HabitRepository {
     if (tempStreak > longestStreak) longestStreak = tempStreak;
     if (currentStreak > longestStreak) longestStreak = currentStreak;
 
-    await _db
-        .into(_db.habitStreaks)
-        .insertOnConflictUpdate(
-          HabitStreaksCompanion.insert(
-            habitId: habitId,
-            currentStreak: Value(currentStreak),
-            longestStreak: Value(longestStreak),
-            lastCompletedDate: Value(latestDateStr),
-          ),
-        );
+    final existing = await (_db.select(_db.habitStreaks)
+          ..where((tbl) => tbl.habitId.equals(habitId)))
+        .getSingleOrNull();
+
+    if (existing == null) {
+      await _db
+          .into(_db.habitStreaks)
+          .insert(
+            HabitStreaksCompanion.insert(
+              habitId: habitId,
+              currentStreak: Value(currentStreak),
+              longestStreak: Value(longestStreak),
+              lastCompletedDate: Value(latestDateStr),
+            ),
+          );
+    } else {
+      await (_db.update(_db.habitStreaks)
+            ..where((tbl) => tbl.habitId.equals(habitId)))
+          .write(
+            HabitStreaksCompanion(
+              currentStreak: Value(currentStreak),
+              longestStreak: Value(longestStreak),
+              lastCompletedDate: Value(latestDateStr),
+            ),
+          );
+    }
   }
 
   Future<List<HabitEntry>> getEntriesForMonth(

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/localization/app_strings.dart';
 import '../../../app/providers.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/logging/app_logger.dart';
 import '../../../core/permissions/permission_service.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/app_icon_widget.dart';
@@ -88,8 +89,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
             dailyGoalMinutes: goalMins,
             topApps: topApps,
           );
-    } catch (_) {
-      // Graceful error handling for offline or query failures
+    } catch (e, st) {
+      AppLogger.error('Failed to refresh dashboard data: $e', e, st);
     } finally {
       if (mounted) setState(() => _isSyncing = false);
     }

@@ -104,7 +104,9 @@ class UsageStatsReader(private val context: Context) {
     }
 
     fun queryUsage(startTime: Long, endTime: Long): Map<String, Any> {
+        android.util.Log.d("UsageStatsReader", "queryUsage called: startTime=$startTime, endTime=$endTime")
         if (usageStatsManager == null) {
+            android.util.Log.e("UsageStatsReader", "usageStatsManager is null!")
             return mapOf(
                 "success" to false,
                 "error" to "UsageStatsManager unavailable",
@@ -289,7 +291,11 @@ class UsageStatsReader(private val context: Context) {
         // Always merge with system aggregated stats to guarantee exact match with Digital Wellbeing
         try {
             val aggregated = usageStatsManager.queryAndAggregateUsageStats(startTime, endTime)
+            android.util.Log.d("UsageStatsReader", "Aggregated stats size: ${aggregated.size}")
             for ((pkg, stats) in aggregated) {
+                if (stats.totalTimeInForeground > 0L) {
+                    android.util.Log.d("UsageStatsReader", "App with time: $pkg -> ${stats.totalTimeInForeground}ms (excluded=${isExcluded(pkg)})")
+                }
                 if (stats.totalTimeInForeground > 0L && !isExcluded(pkg)) {
                     val existing = foregroundTimeMap[pkg] ?: 0L
                     if (stats.totalTimeInForeground > existing) {
@@ -303,7 +309,9 @@ class UsageStatsReader(private val context: Context) {
                     }
                 }
             }
-        } catch (_: Exception) {}
+        } catch (e: Exception) {
+            android.util.Log.e("UsageStatsReader", "Error querying aggregated stats: ${e.message}")
+        }
 
         if (deviceUnlocks == 0) {
             val totalLaunches = launchCountMap.values.sum()
@@ -342,6 +350,8 @@ class UsageStatsReader(private val context: Context) {
                 )
             )
         }
+
+        android.util.Log.d("UsageStatsReader", "Returning ${appResults.size} apps. Total foreground: ${appResults.sumOf { it["foregroundTimeMs"] as Long }}ms")
 
         return mapOf(
             "success" to true,
