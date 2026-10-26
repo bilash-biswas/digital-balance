@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'providers.dart';
@@ -28,6 +29,21 @@ class DigitalBalanceApp extends ConsumerWidget {
         GlobalCupertinoLocalizations.delegate,
       ],
       routerConfig: router,
+      builder: (context, child) {
+        final brightness = Theme.of(context).brightness;
+        final isDark = brightness == Brightness.dark;
+        final overlayStyle = SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+          statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
+          systemNavigationBarColor: Colors.transparent,
+          systemNavigationBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+        );
+        return AnnotatedRegion<SystemUiOverlayStyle>(
+          value: overlayStyle,
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
     );
   }
 }
