@@ -125,18 +125,47 @@ class UsageStatsReader(private val context: Context) {
         // Find all Home launcher packages to exclude them from user screen time
         val homeIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
         val homeResolveInfos = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            packageManager.queryIntentActivities(homeIntent, PackageManager.ResolveInfoFlags.of(0))
+            packageManager.queryIntentActivities(
+                homeIntent,
+                PackageManager.ResolveInfoFlags.of(PackageManager.MATCH_ALL.toLong())
+            )
         } else {
             @Suppress("DEPRECATION")
-            packageManager.queryIntentActivities(homeIntent, 0)
+            packageManager.queryIntentActivities(homeIntent, PackageManager.MATCH_ALL)
         }
         val launcherPackages = homeResolveInfos.mapNotNull { it.activityInfo?.packageName }.toSet()
 
+        val knownHomeLaunchers = setOf(
+            "com.google.android.apps.nexuslauncher",
+            "com.android.launcher",
+            "com.android.launcher3",
+            "com.sec.android.app.launcher",
+            "com.miui.home",
+            "com.oppo.launcher",
+            "com.oneplus.launcher",
+            "com.huawei.android.launcher",
+            "com.transsion.launcher",
+            "com.teslacoilsw.launcher",
+            "com.microsoft.launcher"
+        )
+
+        val systemInfrastructure = setOf(
+            "android",
+            "com.android.systemui",
+            "com.android.keyguard",
+            "com.android.settings",
+            "com.google.android.settings.intelligence",
+            "com.google.android.permissioncontroller",
+            "com.android.permissioncontroller",
+            "com.google.android.packageinstaller",
+            "com.android.packageinstaller",
+            "com.android.intentresolver"
+        )
+
         val excludedPackages = mutableSetOf<String>().apply {
             addAll(launcherPackages)
-            add("com.android.systemui")
-            add("android")
-            add(context.packageName)
+            addAll(knownHomeLaunchers)
+            addAll(systemInfrastructure)
             getDefaultLauncherPackage()?.let { add(it) }
         }
 
@@ -151,26 +180,19 @@ class UsageStatsReader(private val context: Context) {
 
         fun isExcluded(pkg: String): Boolean {
             if (pkg in excludedPackages) return true
-            if (pkg == context.packageName) return true
-            // If it's a system app with no launcher entry, exclude it from screen time
-            if (pkg !in launcherPackageSet) {
-                try {
-                    val appInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        packageManager.getApplicationInfo(pkg, PackageManager.ApplicationInfoFlags.of(0))
-                    } else {
-                        @Suppress("DEPRECATION")
-                        packageManager.getApplicationInfo(pkg, 0)
-                    }
-                    // Only exclude pure system apps without launcher entry (ignore updated system apps like Chrome, Maps)
-                    if ((appInfo.flags and ApplicationInfo.FLAG_SYSTEM) != 0 && (appInfo.flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) == 0) {
-                        return true
-                    }
-                } catch (_: Exception) {
-                    // Do not exclude if package lookup fails; it may be an unqueried user package
-                    return false
+            if (pkg in launcherPackageSet) return false // User-launchable app like Brave, eFootball, etc.
+            // If not in launcher apps, check if it's an internal system service
+            return try {
+                val appInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    packageManager.getApplicationInfo(pkg, PackageManager.ApplicationInfoFlags.of(0))
+                } else {
+                    @Suppress("DEPRECATION")
+                    packageManager.getApplicationInfo(pkg, 0)
                 }
+                (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) != 0
+            } catch (_: Exception) {
+                true
             }
-            return false
         }
 
         fun addSessionToHourly(startMs: Long, endMs: Long) {
@@ -214,7 +236,6 @@ class UsageStatsReader(private val context: Context) {
 
             if (effectiveEnd > effectiveStart) {
                 val duration = effectiveEnd - effectiveStart
-                // Continuous foreground session without screen off cannot exceed query interval
                 if (duration in 1..86400000L) {
                     foregroundTimeMap[pkg] = (foregroundTimeMap[pkg] ?: 0L) + duration
                     addSessionToHourly(effectiveStart, effectiveEnd)
@@ -222,7 +243,7 @@ class UsageStatsReader(private val context: Context) {
             }
         }
 
-        // Query events from up to 3 hours before startTime to catch sessions crossing midnight
+        // 1. Process precise event stream for real-time transitions, hourly distribution, unlocks, and notifications
         val queryStart = maxOf(0L, startTime - 3 * 3600 * 1000L)
 
         try {
@@ -251,17 +272,9 @@ class UsageStatsReader(private val context: Context) {
                             lastUsedMap[pkg] = timestamp
                         }
                     }
-                    UsageEvents.Event.ACTIVITY_PAUSED,
-                    UsageEvents.Event.MOVE_TO_BACKGROUND -> {
-                        if (currentForegroundPkg == pkg) {
-                            closeCurrentSession(timestamp)
-                        }
-                        if (timestamp > (lastUsedMap[pkg] ?: 0L)) {
-                            lastUsedMap[pkg] = timestamp
-                        }
-                    }
                     UsageEvents.Event.SCREEN_NON_INTERACTIVE,
-                    UsageEvents.Event.KEYGUARD_SHOWN -> {
+                    UsageEvents.Event.KEYGUARD_SHOWN,
+                    26 -> { // UsageEvents.Event.DEVICE_SHUTDOWN
                         closeCurrentSession(timestamp)
                     }
                     UsageEvents.Event.KEYGUARD_HIDDEN -> {
@@ -286,31 +299,45 @@ class UsageStatsReader(private val context: Context) {
             if (currentForegroundPkg != null) {
                 closeCurrentSession(minOf(endTime, currentForegroundStart + 3600000L))
             }
-        } catch (_: Exception) {}
+        } catch (e: Exception) {
+            android.util.Log.e("UsageStatsReader", "Error processing usage events: ${e.message}")
+        }
 
-        // Always merge with system aggregated stats to guarantee exact match with Digital Wellbeing
+        // 2. Query system daily stats to align with Digital Wellbeing's totalTimeVisible
         try {
-            val aggregated = usageStatsManager.queryAndAggregateUsageStats(startTime, endTime)
-            android.util.Log.d("UsageStatsReader", "Aggregated stats size: ${aggregated.size}")
-            for ((pkg, stats) in aggregated) {
-                if (stats.totalTimeInForeground > 0L) {
-                    android.util.Log.d("UsageStatsReader", "App with time: $pkg -> ${stats.totalTimeInForeground}ms (excluded=${isExcluded(pkg)})")
+            val dailyStats = usageStatsManager.queryUsageStats(
+                UsageStatsManager.INTERVAL_DAILY,
+                startTime,
+                endTime
+            ) ?: emptyList()
+
+            val statsByPackage = dailyStats.groupBy { it.packageName }
+            for ((pkg, statsList) in statsByPackage) {
+                if (isExcluded(pkg)) continue
+
+                // Pick the active bucket for today with latest activity
+                val todayBucket = statsList
+                    .filter { it.lastTimeStamp >= startTime }
+                    .maxByOrNull { it.lastTimeStamp } ?: continue
+
+                val visibleMs = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    todayBucket.totalTimeVisible
+                } else {
+                    0L
                 }
-                if (stats.totalTimeInForeground > 0L && !isExcluded(pkg)) {
-                    val existing = foregroundTimeMap[pkg] ?: 0L
-                    if (stats.totalTimeInForeground > existing) {
-                        foregroundTimeMap[pkg] = stats.totalTimeInForeground
-                    }
-                    if (stats.lastTimeUsed > (lastUsedMap[pkg] ?: 0L)) {
-                        lastUsedMap[pkg] = stats.lastTimeUsed
-                    }
-                    if ((launchCountMap[pkg] ?: 0) == 0) {
-                        launchCountMap[pkg] = 1
+                val statMs = if (visibleMs > 0L) visibleMs else todayBucket.totalTimeInForeground
+
+                if (statMs > 0L) {
+                    val eventDuration = foregroundTimeMap[pkg] ?: 0L
+                    // Use max to capture either the flushed system metric or real-time event session
+                    foregroundTimeMap[pkg] = maxOf(statMs, eventDuration)
+                    if (todayBucket.lastTimeUsed > (lastUsedMap[pkg] ?: 0L)) {
+                        lastUsedMap[pkg] = todayBucket.lastTimeUsed
                     }
                 }
             }
         } catch (e: Exception) {
-            android.util.Log.e("UsageStatsReader", "Error querying aggregated stats: ${e.message}")
+            android.util.Log.e("UsageStatsReader", "Error querying daily usage stats: ${e.message}")
         }
 
         if (deviceUnlocks == 0) {
@@ -351,7 +378,11 @@ class UsageStatsReader(private val context: Context) {
             )
         }
 
-        android.util.Log.d("UsageStatsReader", "Returning ${appResults.size} apps. Total foreground: ${appResults.sumOf { it["foregroundTimeMs"] as Long }}ms")
+        val totalForeground = appResults.sumOf { it["foregroundTimeMs"] as Long }
+        android.util.Log.i("UsageStatsReader", "queryUsage returning ${appResults.size} apps. Total foreground: ${totalForeground}ms (${totalForeground / 60000} mins)")
+        for (app in appResults.sortedByDescending { it["foregroundTimeMs"] as Long }.take(8)) {
+            android.util.Log.i("UsageStatsReader", "  -> ${app["packageName"]} (${app["appName"]}): ${(app["foregroundTimeMs"] as Long) / 60000} mins")
+        }
 
         return mapOf(
             "success" to true,
