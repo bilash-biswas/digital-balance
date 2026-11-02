@@ -23,12 +23,14 @@ class BlockerActivity : AppCompatActivity() {
         const val EXTRA_RULE_ID = "extra_rule_id"
         const val EXTRA_RULE_NAME = "extra_rule_name"
         const val EXTRA_REASON = "extra_reason"
+        const val EXTRA_IS_HARD_LOCK = "extra_is_hard_lock"
     }
 
     private var targetPackage: String = ""
     private var ruleId: String = ""
     private var ruleName: String = ""
     private var reason: String = ""
+    private var isHardLock: Boolean = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -65,6 +67,7 @@ class BlockerActivity : AppCompatActivity() {
         ruleId = intent.getStringExtra(EXTRA_RULE_ID) ?: ""
         ruleName = intent.getStringExtra(EXTRA_RULE_NAME) ?: "Digital Balance"
         reason = intent.getStringExtra(EXTRA_REASON) ?: "Application is currently restricted."
+        isHardLock = intent.getBooleanExtra(EXTRA_IS_HARD_LOCK, false)
     }
 
     private fun shouldDismissForPackage(pkg: String): Boolean {
@@ -181,26 +184,52 @@ class BlockerActivity : AppCompatActivity() {
         }
         rootLayout.addView(homeButton)
 
-        // Button 2: Unlock for 5 Minutes (Secondary Outline)
-        val overrideButton = Button(this).apply {
-            text = "Unlock for 5 Minutes"
-            setTextColor(Color.parseColor("#ADC6FF"))
-            textSize = 15f
-            background = GradientDrawable().apply {
-                setColor(Color.TRANSPARENT)
-                setStroke(2, Color.parseColor("#8E9099"))
-                cornerRadius = 32f
+        if (!isHardLock) {
+            // Button 2: Unlock for 5 Minutes (Secondary Outline)
+            val overrideButton = Button(this).apply {
+                text = "Unlock for 5 Minutes"
+                setTextColor(Color.parseColor("#ADC6FF"))
+                textSize = 15f
+                background = GradientDrawable().apply {
+                    setColor(Color.TRANSPARENT)
+                    setStroke(2, Color.parseColor("#8E9099"))
+                    cornerRadius = 32f
+                }
+                setPadding(48, 28, 48, 28)
+                layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                )
+                setOnClickListener {
+                    onUnlockClicked(appName)
+                }
             }
-            setPadding(48, 28, 48, 28)
-            layoutParams = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-            )
-            setOnClickListener {
-                onUnlockClicked(appName)
+            rootLayout.addView(overrideButton)
+        } else {
+            // Hard Lock Active Badge
+            val hardLockBadge = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER
+                background = GradientDrawable().apply {
+                    setColor(Color.parseColor("#251315"))
+                    cornerRadius = 24f
+                    setStroke(2, Color.parseColor("#E06A6A"))
+                }
+                setPadding(36, 20, 36, 20)
+                layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                )
             }
+            val lockText = TextView(this).apply {
+                text = "🔒 Hard Lock Active: No overrides permitted"
+                setTextColor(Color.parseColor("#FFB4AB"))
+                textSize = 13f
+                typeface = Typeface.DEFAULT_BOLD
+            }
+            hardLockBadge.addView(lockText)
+            rootLayout.addView(hardLockBadge)
         }
-        rootLayout.addView(overrideButton)
 
         setContentView(rootLayout)
     }

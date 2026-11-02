@@ -4,12 +4,14 @@ import '../../../core/utils/formatters.dart';
 class DailyGoalBottomSheet extends StatefulWidget {
   final int initialMinutes;
   final bool initialEnforceRestriction;
-  final void Function(int minutes, bool enforceRestriction) onSaved;
+  final bool initialHardLock;
+  final void Function(int minutes, bool enforceRestriction, bool hardLock) onSaved;
 
   const DailyGoalBottomSheet({
     super.key,
     required this.initialMinutes,
     this.initialEnforceRestriction = false,
+    this.initialHardLock = false,
     required this.onSaved,
   });
 
@@ -17,7 +19,8 @@ class DailyGoalBottomSheet extends StatefulWidget {
     BuildContext context, {
     required int initialMinutes,
     bool initialEnforceRestriction = false,
-    required void Function(int minutes, bool enforceRestriction) onSaved,
+    bool initialHardLock = false,
+    required void Function(int minutes, bool enforceRestriction, bool hardLock) onSaved,
   }) {
     return showModalBottomSheet<void>(
       context: context,
@@ -28,6 +31,7 @@ class DailyGoalBottomSheet extends StatefulWidget {
       builder: (context) => DailyGoalBottomSheet(
         initialMinutes: initialMinutes,
         initialEnforceRestriction: initialEnforceRestriction,
+        initialHardLock: initialHardLock,
         onSaved: onSaved,
       ),
     );
@@ -40,6 +44,7 @@ class DailyGoalBottomSheet extends StatefulWidget {
 class _DailyGoalBottomSheetState extends State<DailyGoalBottomSheet> {
   late int _selectedMinutes;
   late bool _enforceRestriction;
+  late bool _hardLock;
 
   final List<int> _presetOptions = const [90, 120, 150, 180, 240];
 
@@ -48,6 +53,7 @@ class _DailyGoalBottomSheetState extends State<DailyGoalBottomSheet> {
     super.initState();
     _selectedMinutes = widget.initialMinutes;
     _enforceRestriction = widget.initialEnforceRestriction;
+    _hardLock = widget.initialHardLock;
   }
 
   @override
@@ -213,6 +219,46 @@ class _DailyGoalBottomSheetState extends State<DailyGoalBottomSheet> {
                 ),
               ),
             ),
+
+            // Hard Lock Toggle (Only visible if enforcement is enabled)
+            if (_enforceRestriction) ...[
+              const SizedBox(height: 12),
+              Container(
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: _hardLock
+                        ? theme.colorScheme.primary.withValues(alpha: 0.5)
+                        : theme.colorScheme.outlineVariant.withValues(alpha: 0.4),
+                  ),
+                ),
+                child: SwitchListTile.adaptive(
+                  value: _hardLock,
+                  onChanged: (val) {
+                    setState(() => _hardLock = val);
+                  },
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  title: Text(
+                    'Hard Lock (Strict Mode)',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  subtitle: Text(
+                    'Removes the 5-minute unlock button and locks target adjustments until midnight once reached.',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  secondary: Icon(
+                    _hardLock ? Icons.lock_rounded : Icons.lock_open_rounded,
+                    color: _hardLock ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ],
             const SizedBox(height: 20),
 
             // Actions
@@ -226,7 +272,7 @@ class _DailyGoalBottomSheetState extends State<DailyGoalBottomSheet> {
                 const SizedBox(width: 8),
                 FilledButton(
                   onPressed: () {
-                    widget.onSaved(_selectedMinutes, _enforceRestriction);
+                    widget.onSaved(_selectedMinutes, _enforceRestriction, _hardLock);
                     Navigator.of(context).pop();
                   },
                   child: const Text('Set Daily Target'),

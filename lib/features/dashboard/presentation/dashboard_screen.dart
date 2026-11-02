@@ -296,21 +296,45 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                                       ref.read(settingsRepositoryProvider);
                                   final currentRestrict = await settingsRepo
                                       .isDailyTargetRestrictionEnabled();
+                                  final currentHardLock = await settingsRepo
+                                      .isDailyTargetHardLockEnabled();
+
+                                  if (isRestricted && currentHardLock && percent >= 100) {
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                          content: Text(
+                                            '🔒 Hard Lock Active: Daily target adjustments are locked until 12:00 AM.',
+                                          ),
+                                          behavior: SnackBarBehavior.floating,
+                                        ),
+                                      );
+                                    }
+                                    return;
+                                  }
+
                                   if (!context.mounted) return;
                                   await DailyGoalBottomSheet.show(
                                     context,
                                     initialMinutes: goalMinutes,
                                     initialEnforceRestriction: currentRestrict,
-                                    onSaved: (newGoal, newEnforce) async {
+                                    initialHardLock: currentHardLock,
+                                    onSaved: (newGoal, newEnforce, newHardLock) async {
                                       await settingsRepo
                                           .setDailyGoalMinutes(newGoal);
                                       await settingsRepo
                                           .setDailyTargetRestrictionEnabled(
                                               newEnforce);
+                                      await settingsRepo
+                                          .setDailyTargetHardLockEnabled(
+                                              newHardLock);
                                       final bridge = PlatformBridge();
                                       await bridge.setDailyTargetEnforcement(
                                         enabled: newEnforce,
                                         targetMinutes: newGoal,
+                                      );
+                                      await bridge.setDailyTargetHardLock(
+                                        enabled: newHardLock,
                                       );
                                     },
                                   );

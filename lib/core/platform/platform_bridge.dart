@@ -265,6 +265,19 @@ class PlatformBridge {
     }
   }
 
+  Future<bool> setDailyTargetHardLock({required bool enabled}) async {
+    try {
+      final res = await _enforcementChannel.invokeMethod<bool>(
+        'setDailyTargetHardLock',
+        {'enabled': enabled},
+      );
+      return res ?? false;
+    } catch (e, st) {
+      AppLogger.error('Failed to set daily target hard lock', e, st);
+      return false;
+    }
+  }
+
   Future<bool> syncRules(String policiesJson) async {
     try {
       final res = await _enforcementChannel.invokeMethod<bool>('syncRules', {

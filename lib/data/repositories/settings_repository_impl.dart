@@ -57,6 +57,31 @@ class SettingsRepository {
     await setSetting('daily_target_restriction_enabled', enabled ? 'true' : 'false');
   }
 
+  Future<bool> isDailyTargetHardLockEnabled() async {
+    final val = await getSetting('daily_target_hard_lock_enabled');
+    return val == 'true';
+  }
+
+  Stream<bool> watchDailyTargetHardLockEnabled() {
+    return (_db.select(_db.userSettings)
+          ..where((tbl) => tbl.key.equals('daily_target_hard_lock_enabled')))
+        .watchSingleOrNull()
+        .map((entry) => entry?.value == 'true');
+  }
+
+  Future<void> setDailyTargetHardLockEnabled(bool enabled) async {
+    await setSetting('daily_target_hard_lock_enabled', enabled ? 'true' : 'false');
+  }
+
+  Future<bool> isAppHardLocked(String packageName) async {
+    final val = await getSetting('hard_lock_$packageName');
+    return val == 'true';
+  }
+
+  Future<void> setAppHardLocked(String packageName, bool enabled) async {
+    await setSetting('hard_lock_$packageName', enabled ? 'true' : 'false');
+  }
+
   Future<String> getThemeMode() async {
     final val = await getSetting('theme_mode');
     return val ?? 'system';

@@ -12,7 +12,8 @@ data class RestrictionPolicy(
     val endMinuteOfDay: Int,     // e.g. 7 * 60 = 420 (07:00)
     val daysOfWeek: Set<Int>,    // 1 = Monday ... 7 = Sunday
     val isTemporaryBlock: Boolean = false,
-    val tempBlockUntilMs: Long = 0L
+    val tempBlockUntilMs: Long = 0L,
+    val isHardLock: Boolean = false
 ) {
     fun toJson(): JSONObject {
         return JSONObject().apply {
@@ -25,6 +26,7 @@ data class RestrictionPolicy(
             put("daysOfWeek", JSONArray(daysOfWeek))
             put("isTemporaryBlock", isTemporaryBlock)
             put("tempBlockUntilMs", tempBlockUntilMs)
+            put("isHardLock", isHardLock)
         }
     }
 
@@ -51,7 +53,8 @@ data class RestrictionPolicy(
                 endMinuteOfDay = json.optInt("endMinuteOfDay", -1),
                 daysOfWeek = days,
                 isTemporaryBlock = json.optBoolean("isTemporaryBlock", false),
-                tempBlockUntilMs = json.optLong("tempBlockUntilMs", 0L)
+                tempBlockUntilMs = json.optLong("tempBlockUntilMs", 0L),
+                isHardLock = json.optBoolean("isHardLock", false)
             )
         }
     }

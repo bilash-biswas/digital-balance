@@ -419,6 +419,17 @@ class UsageRepository {
     return (totalMs / (1000 * 60)).round();
   }
 
+  Future<int> getTodayMinutesForPackage(String packageName) async {
+    final todayStr = Formatters.formatFullDate(_timeProvider.todayMidnight());
+    final record = await (_db.select(_db.usageDaily)
+          ..where(
+            (tbl) =>
+                tbl.date.equals(todayStr) & tbl.packageName.equals(packageName),
+          ))
+        .getSingleOrNull();
+    return ((record?.foregroundTimeMs ?? 0) / (1000 * 60)).round();
+  }
+
   Future<int> getYesterdayTotalMinutes() async {
     final yesterday = _timeProvider.todayMidnight().subtract(
       const Duration(days: 1),

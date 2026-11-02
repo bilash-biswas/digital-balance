@@ -20,6 +20,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   int _dailyGoalMinutes = 180;
   bool _biometricOverride = false;
   bool _enforceDailyTarget = false;
+  bool _hardLockDailyTarget = false;
+  bool _isTargetLockedToday = false;
   bool _isLoading = true;
   bool _isCheckingUpdate = false;
   String _currentVersion = AppConstants.appVersion;
@@ -35,6 +37,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final goal = await settingsRepo.getDailyGoalMinutes();
     final bio = await settingsRepo.isBiometricOverrideEnabled();
     final enforce = await settingsRepo.isDailyTargetRestrictionEnabled();
+    final hardLock = await settingsRepo.isDailyTargetHardLockEnabled();
+    final usageRepo = ref.read(usageRepositoryProvider);
+    final todayMinutes = await usageRepo.getTodayTotalMinutes();
     final bridge = PlatformBridge();
     final ver = await bridge.getAppVersion();
 
@@ -43,6 +48,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         _dailyGoalMinutes = goal;
         _biometricOverride = bio;
         _enforceDailyTarget = enforce;
+        _hardLockDailyTarget = hardLock;
+        _isTargetLockedToday = enforce && hardLock && todayMinutes >= goal;
         _currentVersion = ver;
         _isLoading = false;
       });
@@ -115,38 +122,74 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     color: theme.colorScheme.primary,
                   ),
                 ),
+                const SizedBox(height: 8),
+                if (_isTargetLockedToday) ...[
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    margin: const EdgeInsets.only(bottom: 8),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.errorContainer.withValues(alpha: 0.7),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: theme.colorScheme.error.withValues(alpha: 0.4),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.lock_rounded, color: theme.colorScheme.error, size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Hard Lock Active: Today\'s screen time target is reached. Adjustments are locked until 12:00 AM.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: theme.colorScheme.onErrorContainer,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                 Slider(
                   value: _dailyGoalMinutes.toDouble(),
                   min: 30,
                   max: 480,
                   divisions: 30,
-                  onChanged: (val) {
-                    setState(() => _dailyGoalMinutes = val.round());
-                  },
-                  onChangeEnd: (val) async {
-                    await settingsRepo.setDailyGoalMinutes(val.round());
-                    if (_enforceDailyTarget) {
-                      final bridge = PlatformBridge();
-                      await bridge.setDailyTargetEnforcement(
-                        enabled: true,
-                        targetMinutes: val.round(),
-                      );
-                    }
-                  },
+                  onChanged: _isTargetLockedToday
+                      ? null
+                      : (val) {
+                          setState(() => _dailyGoalMinutes = val.round());
+                        },
+                  onChangeEnd: _isTargetLockedToday
+                      ? null
+                      : (val) async {
+                          await settingsRepo.setDailyGoalMinutes(val.round());
+                          if (_enforceDailyTarget) {
+                            final bridge = PlatformBridge();
+                            await bridge.setDailyTargetEnforcement(
+                              enabled: true,
+                              targetMinutes: val.round(),
+                            );
+                          }
+                        },
                 ),
                 const Divider(height: 24),
                 SwitchListTile.adaptive(
                   contentPadding: EdgeInsets.zero,
                   value: _enforceDailyTarget,
-                  onChanged: (val) async {
-                    setState(() => _enforceDailyTarget = val);
-                    await settingsRepo.setDailyTargetRestrictionEnabled(val);
-                    final bridge = PlatformBridge();
-                    await bridge.setDailyTargetEnforcement(
-                      enabled: val,
-                      targetMinutes: _dailyGoalMinutes,
-                    );
-                  },
+                  onChanged: _isTargetLockedToday
+                      ? null
+                      : (val) async {
+                          setState(() => _enforceDailyTarget = val);
+                          await settingsRepo.setDailyTargetRestrictionEnabled(val);
+                          final bridge = PlatformBridge();
+                          await bridge.setDailyTargetEnforcement(
+                            enabled: val,
+                            targetMinutes: _dailyGoalMinutes,
+                          );
+                        },
                   title: const Text(
                     'Enforce Daily Target Restriction',
                     style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
@@ -249,20 +292,50 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
           // Security & Overrides
           BalanceCard(
-            child: SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('Biometric Override Confirmation'),
-              subtitle: const Text(
-                'Require fingerprint or face recognition before granting temporary restriction override.',
-                style: TextStyle(fontSize: 12),
-              ),
-              value: _biometricOverride,
-              onChanged: (val) async {
-                setState(() => _biometricOverride = val);
-                await settingsRepo.setBiometricOverrideEnabled(val);
-                final bridge = PlatformBridge();
-                await bridge.setBiometricOverride(enabled: val);
-              },
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Security & Overrides',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                SwitchListTile.adaptive(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Biometric Override Confirmation'),
+                  subtitle: const Text(
+                    'Require fingerprint or face recognition before granting temporary restriction override.',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                  value: _biometricOverride,
+                  onChanged: (val) async {
+                    setState(() => _biometricOverride = val);
+                    await settingsRepo.setBiometricOverrideEnabled(val);
+                    final bridge = PlatformBridge();
+                    await bridge.setBiometricOverride(enabled: val);
+                  },
+                ),
+                const Divider(height: 20),
+                SwitchListTile.adaptive(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Hard Lock Daily Target (Strict Mode)'),
+                  subtitle: const Text(
+                    'Disables the 5-minute unlock button and locks target adjustments until midnight once reached.',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                  value: _hardLockDailyTarget,
+                  onChanged: _isTargetLockedToday
+                      ? null
+                      : (val) async {
+                          setState(() => _hardLockDailyTarget = val);
+                          await settingsRepo.setDailyTargetHardLockEnabled(val);
+                          final bridge = PlatformBridge();
+                          await bridge.setDailyTargetHardLock(enabled: val);
+                        },
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 14),

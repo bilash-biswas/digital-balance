@@ -39,6 +39,9 @@ class AppTimerDialog extends ConsumerStatefulWidget {
 class _AppTimerDialogState extends ConsumerState<AppTimerDialog> {
   late int _minutes;
   bool _isSaving = false;
+  bool _isHardLock = false;
+  bool _isLockedUntilMidnight = false;
+  bool _isLoading = true;
 
   final List<int> _quickPresets = [15, 30, 45, 60, 90, 120, 180, 240];
 
@@ -46,6 +49,24 @@ class _AppTimerDialogState extends ConsumerState<AppTimerDialog> {
   void initState() {
     super.initState();
     _minutes = widget.currentLimitMinutes > 0 ? widget.currentLimitMinutes : 30;
+    _checkLockStatus();
+  }
+
+  Future<void> _checkLockStatus() async {
+    final repo = ref.read(restrictionRepositoryProvider);
+    final hardLocked = await repo.isAppHardLocked(widget.packageName);
+    final usageRepo = ref.read(usageRepositoryProvider);
+    final todayUsage = await usageRepo.getTodayMinutesForPackage(widget.packageName);
+
+    if (mounted) {
+      setState(() {
+        _isHardLock = hardLocked;
+        if (hardLocked && widget.currentLimitMinutes > 0 && todayUsage >= widget.currentLimitMinutes) {
+          _isLockedUntilMidnight = true;
+        }
+        _isLoading = false;
+      });
+    }
   }
 
   @override
@@ -88,99 +109,181 @@ class _AppTimerDialogState extends ConsumerState<AppTimerDialog> {
           ),
         ],
       ),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            const SizedBox(height: 8),
-            // Big Duration Badge
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.primaryContainer,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(
-                Formatters.formatDurationMinutes(_minutes),
-                style: TextStyle(
-                  fontSize: 26,
-                  fontWeight: FontWeight.bold,
-                  color: theme.colorScheme.onPrimaryContainer,
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
+      content: _isLoading
+          ? const SizedBox(
+              height: 120,
+              child: Center(child: CircularProgressIndicator()),
+            )
+          : SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  if (_isLockedUntilMidnight) ...[
+                    Container(
+                      margin: const EdgeInsets.symmetric(vertical: 8),
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.errorContainer.withValues(alpha: 0.7),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: theme.colorScheme.error.withValues(alpha: 0.4),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.lock_rounded, color: theme.colorScheme.error, size: 24),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'Hard Lock Active: ${widget.appName} has reached today\'s limit (${Formatters.formatDurationMinutes(widget.currentLimitMinutes)}). The timer cannot be changed or removed until 12:00 AM.',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: theme.colorScheme.onErrorContainer,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
 
-            // Continuous Slider
-            Slider(
-              value: _minutes.toDouble(),
-              min: 5,
-              max: 360,
-              divisions: 71, // 5 min increments up to 6 hours
-              label: '${_minutes}m',
-              onChanged: (val) => setState(() => _minutes = val.round()),
-            ),
-
-            const SizedBox(height: 8),
-            // Quick preset pills
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              alignment: WrapAlignment.center,
-              children: _quickPresets.map((preset) {
-                final isSelected = _minutes == preset;
-                return ChoiceChip(
-                  label: Text(
-                    Formatters.formatDurationMinutes(preset),
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                  // Big Duration Badge
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primaryContainer,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      Formatters.formatDurationMinutes(_minutes),
+                      style: TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.bold,
+                        color: theme.colorScheme.onPrimaryContainer,
+                      ),
                     ),
                   ),
-                  selected: isSelected,
-                  onSelected: (val) {
-                    if (val) setState(() => _minutes = preset);
-                  },
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'When the timer runs out, ${widget.appName} will pause and its notifications will be muted for the rest of today.',
-              style: TextStyle(
-                fontSize: 12,
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
-                height: 1.3,
+                  const SizedBox(height: 16),
+
+                  // Continuous Slider
+                  Slider(
+                    value: _minutes.toDouble(),
+                    min: 5,
+                    max: 360,
+                    divisions: 71, // 5 min increments up to 6 hours
+                    label: '${_minutes}m',
+                    onChanged: _isLockedUntilMidnight
+                        ? null
+                        : (val) => setState(() => _minutes = val.round()),
+                  ),
+
+                  const SizedBox(height: 8),
+                  // Quick preset pills
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    alignment: WrapAlignment.center,
+                    children: _quickPresets.map((preset) {
+                      final isSelected = _minutes == preset;
+                      return ChoiceChip(
+                        label: Text(
+                          Formatters.formatDurationMinutes(preset),
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                          ),
+                        ),
+                        selected: isSelected,
+                        onSelected: _isLockedUntilMidnight
+                            ? null
+                            : (val) {
+                                if (val) setState(() => _minutes = preset);
+                              },
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Hard Lock Switch Card
+                  Container(
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: _isHardLock
+                            ? theme.colorScheme.primary.withValues(alpha: 0.6)
+                            : theme.colorScheme.outlineVariant.withValues(alpha: 0.4),
+                      ),
+                    ),
+                    child: SwitchListTile.adaptive(
+                      value: _isHardLock,
+                      onChanged: _isLockedUntilMidnight
+                          ? null
+                          : (val) => setState(() => _isHardLock = val),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+                      secondary: Icon(
+                        _isHardLock ? Icons.lock_rounded : Icons.lock_open_rounded,
+                        color: _isHardLock ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant,
+                      ),
+                      title: const Text(
+                        'Hard Lock (Strict Mode)',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                      ),
+                      subtitle: const Text(
+                        'Hides the 5-minute unlock button and locks this timer until midnight when reached.',
+                        style: TextStyle(fontSize: 11),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  Text(
+                    _isHardLock
+                        ? 'When the timer runs out, ${widget.appName} will pause and cannot be unlocked until tomorrow.'
+                        : 'When the timer runs out, ${widget.appName} will pause and its notifications will be muted for the rest of today.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                      height: 1.3,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
               ),
-              textAlign: TextAlign.center,
             ),
-          ],
-        ),
-      ),
       actions: [
-        if (hasExistingLimit)
-          TextButton(
-            onPressed: _isSaving ? null : _deleteLimit,
-            style: TextButton.styleFrom(
-              foregroundColor: theme.colorScheme.error,
+        if (_isLockedUntilMidnight)
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Close'),
+          )
+        else ...[
+          if (hasExistingLimit)
+            TextButton(
+              onPressed: _isSaving ? null : _deleteLimit,
+              style: TextButton.styleFrom(
+                foregroundColor: theme.colorScheme.error,
+              ),
+              child: const Text('Delete timer'),
             ),
-            child: const Text('Delete timer'),
+          TextButton(
+            onPressed: _isSaving ? null : () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
           ),
-        TextButton(
-          onPressed: _isSaving ? null : () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: _isSaving ? null : _saveLimit,
-          child: _isSaving
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Text('Set timer'),
-        ),
+          FilledButton(
+            onPressed: _isSaving ? null : _saveLimit,
+            child: _isSaving
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Text('Set timer'),
+          ),
+        ],
       ],
     );
   }
@@ -192,6 +295,7 @@ class _AppTimerDialogState extends ConsumerState<AppTimerDialog> {
       packageName: widget.packageName,
       appName: widget.appName,
       limitMinutes: _minutes,
+      isHardLock: _isHardLock,
     );
 
     if (mounted) {
@@ -199,7 +303,7 @@ class _AppTimerDialogState extends ConsumerState<AppTimerDialog> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            '${widget.appName} timer set to ${Formatters.formatDurationMinutes(_minutes)} per day.',
+            '${widget.appName} timer set to ${Formatters.formatDurationMinutes(_minutes)} per day${_isHardLock ? " (Hard Lock)" : ""}.',
           ),
           behavior: SnackBarBehavior.floating,
         ),

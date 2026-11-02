@@ -78,6 +78,12 @@ class EnforcementPlatformBridge(
                 prefs.edit().putBoolean("biometric_override_enabled", enabled).commit()
                 result.success(true)
             }
+            "setDailyTargetHardLock" -> {
+                val enabled = call.argument<Boolean>("enabled") ?: false
+                val prefs = context.getSharedPreferences("digital_balance_enforcement_prefs", Context.MODE_PRIVATE)
+                prefs.edit().putBoolean("daily_target_hard_lock_enabled", enabled).commit()
+                result.success(true)
+            }
             else -> {
                 result.notImplemented()
             }

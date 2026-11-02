@@ -145,9 +145,18 @@ class RestrictionRepository {
     required String packageName,
     required String appName,
     required int limitMinutes,
+    bool isHardLock = false,
   }) async {
     final existing = await getRuleForPackage(packageName);
     final ruleId = existing?.rule.id ?? 'timer_$packageName';
+    await _db
+        .into(_db.userSettings)
+        .insertOnConflictUpdate(
+          UserSettingsCompanion.insert(
+            key: 'hard_lock_$packageName',
+            value: isHardLock ? 'true' : 'false',
+          ),
+        );
     await saveRule(
       id: ruleId,
       name: '$appName Timer',
@@ -159,9 +168,19 @@ class RestrictionRepository {
 
   Future<void> removeAppLimit(String packageName) async {
     final existing = await getRuleForPackage(packageName);
+    await (_db.delete(_db.userSettings)
+          ..where((tbl) => tbl.key.equals('hard_lock_$packageName')))
+        .go();
     if (existing != null) {
       await deleteRule(existing.rule.id);
     }
+  }
+
+  Future<bool> isAppHardLocked(String packageName) async {
+    final setting = await (_db.select(_db.userSettings)
+          ..where((tbl) => tbl.key.equals('hard_lock_$packageName')))
+        .getSingleOrNull();
+    return setting?.value == 'true';
   }
 
   Future<void> grantOverride({
@@ -218,6 +237,17 @@ class RestrictionRepository {
             .map((s) => int.tryParse(s.trim()) ?? 1)
             .toList();
 
+        bool isHardLock = false;
+        for (final t in targets) {
+          final setting = await (_db.select(_db.userSettings)
+                ..where((tbl) => tbl.key.equals('hard_lock_${t.packageName}')))
+              .getSingleOrNull();
+          if (setting?.value == 'true') {
+            isHardLock = true;
+            break;
+          }
+        }
+
         jsonPayloadList.add({
           'ruleId': rule.id,
           'ruleName': rule.name,
@@ -228,6 +258,7 @@ class RestrictionRepository {
           'daysOfWeek': days,
           'isTemporaryBlock': rule.isTemporaryBlock,
           'tempBlockUntilMs': rule.tempBlockUntilMs,
+          'isHardLock': isHardLock,
         });
       }
 

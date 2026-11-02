@@ -18,7 +18,8 @@ data class RestrictionResult(
     val isBlocked: Boolean,
     val ruleId: String,
     val ruleName: String,
-    val reason: String
+    val reason: String,
+    val isHardLock: Boolean = false
 )
 
 class EnforcementCoordinator(private val context: Context) {
@@ -203,7 +204,8 @@ class EnforcementCoordinator(private val context: Context) {
                     isBlocked = true,
                     ruleId = policy.ruleId,
                     ruleName = policy.ruleName,
-                    reason = "Focus block in progress"
+                    reason = "Focus block in progress",
+                    isHardLock = policy.isHardLock
                 )
             }
 
@@ -221,7 +223,8 @@ class EnforcementCoordinator(private val context: Context) {
                         isBlocked = true,
                         ruleId = policy.ruleId,
                         ruleName = policy.ruleName,
-                        reason = "Restricted by schedule"
+                        reason = "Restricted by schedule",
+                        isHardLock = policy.isHardLock
                     )
                 }
             }
@@ -234,7 +237,8 @@ class EnforcementCoordinator(private val context: Context) {
                         isBlocked = true,
                         ruleId = policy.ruleId,
                         ruleName = policy.ruleName,
-                        reason = "Daily limit of ${policy.limitMinutesPerDay} minutes reached"
+                        reason = "Daily limit of ${policy.limitMinutesPerDay} minutes reached",
+                        isHardLock = policy.isHardLock
                     )
                 }
             }
@@ -248,11 +252,13 @@ class EnforcementCoordinator(private val context: Context) {
                 val goalHours = dailyTargetLimitMinutes / 60
                 val goalMins = dailyTargetLimitMinutes % 60
                 val targetStr = if (goalHours > 0 && goalMins > 0) "${goalHours}h ${goalMins}m" else if (goalHours > 0) "${goalHours}h" else "${goalMins}m"
+                val globalHardLock = prefs.getBoolean("daily_target_hard_lock_enabled", false)
                 return RestrictionResult(
                     isBlocked = true,
                     ruleId = "__daily_target__",
                     ruleName = "Daily Screen Time Target",
-                    reason = "You have reached your daily screen time target of $targetStr. Non-essential apps are paused."
+                    reason = "You have reached your daily screen time target of $targetStr. Non-essential apps are paused.",
+                    isHardLock = globalHardLock
                 )
             }
         }

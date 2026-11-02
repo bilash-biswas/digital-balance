@@ -62,13 +62,14 @@ class DigitalBalanceAccessibilityService : AccessibilityService() {
     }
 
     private fun launchBlocker(packageName: String, restriction: RestrictionResult) {
-        Log.i("DigitalBalanceService", "Restricting $packageName: ${restriction.reason}")
+        Log.i("DigitalBalanceService", "Restricting $packageName: ${restriction.reason} (hardLock=${restriction.isHardLock})")
 
         val intent = Intent(this, BlockerActivity::class.java).apply {
             putExtra(BlockerActivity.EXTRA_PACKAGE_NAME, packageName)
             putExtra(BlockerActivity.EXTRA_RULE_ID, restriction.ruleId)
             putExtra(BlockerActivity.EXTRA_RULE_NAME, restriction.ruleName)
             putExtra(BlockerActivity.EXTRA_REASON, restriction.reason)
+            putExtra(BlockerActivity.EXTRA_IS_HARD_LOCK, restriction.isHardLock)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         }
         startActivity(intent)

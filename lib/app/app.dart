@@ -30,6 +30,8 @@ class _DigitalBalanceAppState extends ConsumerState<DigitalBalanceApp> {
         );
         final bio = await settingsRepo.isBiometricOverrideEnabled();
         await bridge.setBiometricOverride(enabled: bio);
+        final hardLock = await settingsRepo.isDailyTargetHardLockEnabled();
+        await bridge.setDailyTargetHardLock(enabled: hardLock);
         final restrictionRepo = ref.read(restrictionRepositoryProvider);
         await restrictionRepo.syncActiveRulesToPlatform();
       } catch (_) {}
