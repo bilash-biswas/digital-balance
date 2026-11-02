@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/providers.dart';
+import '../../../core/permissions/permission_service.dart';
 import '../../../core/utils/formatters.dart';
+import '../../../core/widgets/accessibility_disclosure_dialog.dart';
 import '../../../core/widgets/app_icon_widget.dart';
 
 class AppTimerDialog extends ConsumerStatefulWidget {
@@ -72,6 +74,7 @@ class _AppTimerDialogState extends ConsumerState<AppTimerDialog> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final permState = ref.watch(permissionsProvider);
     final hasExistingLimit = widget.currentLimitMinutes > 0;
 
     return AlertDialog(
@@ -119,6 +122,67 @@ class _AppTimerDialogState extends ConsumerState<AppTimerDialog> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
+                  if (!permState.accessibility) ...[
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.errorContainer.withValues(alpha: 0.6),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: theme.colorScheme.error.withValues(alpha: 0.4),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(Icons.accessibility_new_rounded, color: theme.colorScheme.error, size: 20),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Accessibility Service Disabled',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: theme.colorScheme.onErrorContainer,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Enable Digital Balance in Accessibility Settings so Android allows it to pause ${widget.appName} when the timer ends.',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: theme.colorScheme.onErrorContainer,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: FilledButton.tonal(
+                              style: FilledButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                                visualDensity: VisualDensity.compact,
+                              ),
+                              onPressed: () {
+                                AccessibilityDisclosureDialog.show(
+                                  context,
+                                  onApproved: () => ref
+                                      .read(permissionsProvider.notifier)
+                                      .openAccessibilitySettings(),
+                                );
+                              },
+                              child: const Text('Enable in Settings', style: TextStyle(fontSize: 11)),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                   if (_isLockedUntilMidnight) ...[
                     Container(
                       margin: const EdgeInsets.symmetric(vertical: 8),
@@ -300,6 +364,7 @@ class _AppTimerDialogState extends ConsumerState<AppTimerDialog> {
 
     if (mounted) {
       Navigator.of(context).pop();
+      final permState = ref.read(permissionsProvider);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -308,6 +373,15 @@ class _AppTimerDialogState extends ConsumerState<AppTimerDialog> {
           behavior: SnackBarBehavior.floating,
         ),
       );
+
+      if (!permState.accessibility) {
+        AccessibilityDisclosureDialog.show(
+          context,
+          onApproved: () => ref
+              .read(permissionsProvider.notifier)
+              .openAccessibilitySettings(),
+        );
+      }
     }
   }
 

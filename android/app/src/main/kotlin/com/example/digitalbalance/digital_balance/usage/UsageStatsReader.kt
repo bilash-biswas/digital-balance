@@ -395,7 +395,7 @@ class UsageStatsReader(private val context: Context) {
         )
     }
 
-    fun getTodayTotalMinutes(): Int {
+    fun getTodayUsageMap(): Map<String, Long> {
         val calendar = Calendar.getInstance().apply {
             set(Calendar.HOUR_OF_DAY, 0)
             set(Calendar.MINUTE, 0)
@@ -407,11 +407,20 @@ class UsageStatsReader(private val context: Context) {
         val result = queryUsage(startTime, endTime)
         @Suppress("UNCHECKED_CAST")
         val apps = result["apps"] as? List<Map<String, Any>> ?: emptyList()
-        var totalMs = 0L
+        val map = mutableMapOf<String, Long>()
         for (app in apps) {
+            val pkg = app["packageName"] as? String ?: continue
             val ms = (app["foregroundTimeMs"] as? Long) ?: ((app["foregroundTimeMs"] as? Number)?.toLong() ?: 0L)
-            totalMs += ms
+            if (ms > 0L) {
+                map[pkg] = ms
+            }
         }
+        return map
+    }
+
+    fun getTodayTotalMinutes(): Int {
+        val map = getTodayUsageMap()
+        val totalMs = map.values.sum()
         return (totalMs / (1000 * 60)).toInt()
     }
 }

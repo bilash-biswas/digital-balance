@@ -9,6 +9,7 @@ import '../../../core/logging/app_logger.dart';
 import '../../../core/permissions/permission_service.dart';
 import '../../../core/platform/platform_bridge.dart';
 import '../../../core/utils/formatters.dart';
+import '../../../core/widgets/accessibility_disclosure_dialog.dart';
 import '../../../core/widgets/app_icon_widget.dart';
 import '../../../core/widgets/balance_card.dart';
 import '../../../core/widgets/permission_guard_view.dart';
@@ -191,6 +192,26 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                 buttonLabel: 'Enable Access',
                 onAction: () =>
                     ref.read(permissionsProvider.notifier).openUsageSettings(),
+              ),
+              const SizedBox(height: 16),
+            ],
+
+            // Permission Alert Banner if Accessibility Service missing
+            if (!permState.accessibility) ...[
+              PermissionGuardCard(
+                title: 'Accessibility Service Required',
+                description:
+                    'To enforce app timers and block apps when limits are reached, please enable Digital Balance in Accessibility Settings.',
+                icon: Icons.accessibility_new_rounded,
+                buttonLabel: 'Enable Service',
+                onAction: () {
+                  AccessibilityDisclosureDialog.show(
+                    context,
+                    onApproved: () => ref
+                        .read(permissionsProvider.notifier)
+                        .openAccessibilitySettings(),
+                  );
+                },
               ),
               const SizedBox(height: 16),
             ],

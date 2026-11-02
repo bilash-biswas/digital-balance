@@ -35,10 +35,33 @@ class EnforcementCoordinator(private val context: Context) {
     private var dailyTargetLimitMinutes: Int = 180
 
     @Volatile private var cachedTodayMinutes: Int = 0
-    @Volatile private var lastTodayMinutesFetchMs: Long = 0L
+    @Volatile private var lastUsageFetchMs: Long = 0L
+    private val cachedPackageMinutes = ConcurrentHashMap<String, Int>()
 
     init {
         loadFromPrefs()
+    }
+
+    private fun refreshUsageCacheIfNeeded(force: Boolean = false) {
+        val now = System.currentTimeMillis()
+        if (force || now - lastUsageFetchMs > 15_000L) {
+            try {
+                val usageMap = usageReader.getTodayUsageMap()
+                var totalMs = 0L
+                val newPkgMinutes = ConcurrentHashMap<String, Int>()
+                for ((pkg, ms) in usageMap) {
+                    totalMs += ms
+                    newPkgMinutes[pkg] = (ms / (1000 * 60)).toInt()
+                }
+                cachedPackageMinutes.clear()
+                cachedPackageMinutes.putAll(newPkgMinutes)
+                cachedTodayMinutes = (totalMs / (1000 * 60)).toInt()
+                lastUsageFetchMs = now
+                android.util.Log.d("DigitalBalanceService", "Usage cache refreshed: total=${cachedTodayMinutes}m, tracked apps=${cachedPackageMinutes.size}")
+            } catch (e: Exception) {
+                android.util.Log.e("DigitalBalanceService", "Failed to refresh usage cache", e)
+            }
+        }
     }
 
     @Synchronized
@@ -51,8 +74,12 @@ class EnforcementCoordinator(private val context: Context) {
                 val policy = RestrictionPolicy.fromJson(obj)
                 policies[policy.ruleId] = policy
             }
-            prefs.edit().putString("policies_json", policiesJsonArrayString).apply()
-        } catch (_: Exception) {}
+            prefs.edit().putString("policies_json", policiesJsonArrayString).commit()
+            refreshUsageCacheIfNeeded(force = true)
+            android.util.Log.i("DigitalBalanceService", "Updated policies: ${policies.size} policies active")
+        } catch (e: Exception) {
+            android.util.Log.e("DigitalBalanceService", "Error updating policies", e)
+        }
     }
 
     fun setDailyTargetConfig(enabled: Boolean, targetMinutes: Int) {
@@ -62,7 +89,7 @@ class EnforcementCoordinator(private val context: Context) {
             .putBoolean("daily_target_enforcement_enabled", enabled)
             .putInt("daily_target_limit_minutes", targetMinutes)
             .commit()
-        lastTodayMinutesFetchMs = 0L // invalidate cache to recompute
+        refreshUsageCacheIfNeeded(force = true)
         android.util.Log.i("DigitalBalanceService", "Daily target config updated: enabled=$enabled, targetMinutes=$targetMinutes")
     }
 
@@ -99,11 +126,7 @@ class EnforcementCoordinator(private val context: Context) {
     }
 
     fun getTodayTotalMinutesCached(): Int {
-        val now = System.currentTimeMillis()
-        if (now - lastTodayMinutesFetchMs > 20_000L) {
-            cachedTodayMinutes = usageReader.getTodayTotalMinutes()
-            lastTodayMinutesFetchMs = now
-        }
+        refreshUsageCacheIfNeeded()
         return cachedTodayMinutes
     }
 
@@ -267,24 +290,10 @@ class EnforcementCoordinator(private val context: Context) {
     }
 
     private fun getTodayUsageMinutes(packageName: String): Int {
-        val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager ?: return 0
-        val calendar = Calendar.getInstance().apply {
-            set(Calendar.HOUR_OF_DAY, 0)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-        }
-        val startTime = calendar.timeInMillis
-        val endTime = System.currentTimeMillis()
-
-        val stats = usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, startTime, endTime)
-        var totalMs = 0L
-        for (item in stats) {
-            if (item.packageName == packageName) {
-                totalMs += item.totalTimeInForeground
-            }
-        }
-        return (totalMs / (1000 * 60)).toInt()
+        refreshUsageCacheIfNeeded()
+        val minutes = cachedPackageMinutes[packageName] ?: 0
+        android.util.Log.d("DigitalBalanceService", "Usage for $packageName: $minutes mins")
+        return minutes
     }
 
     companion object {
